@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ export function ComposeForm() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user } = useAuth();
+  const clockTriggerRef = useRef<HTMLButtonElement>(null);
 
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -65,6 +66,10 @@ export function ComposeForm() {
     mutation.mutate();
   };
 
+  const handleAttachmentClick = () => {
+    toast.info('File attachments are omitted per spec; use "Upload List" to attach lead files (.csv, .txt)');
+  };
+
   const isComplete = subject.trim() && body.trim() && recipients.length > 0;
 
   return (
@@ -74,17 +79,32 @@ export function ComposeForm() {
           <BackArrowIcon /><span>Compose New Email</span>
         </button>
         <div className="relative flex items-center gap-3">
-          <PaperclipIcon className="h-4 w-4 text-muted cursor-pointer hover:text-primary transition-colors" />
           <button
             type="button"
-            onClick={() => setPopoverOpen(!popoverOpen)}
-            className="p-1.5 rounded-full text-muted hover:text-accent hover:bg-accent-light transition-colors"
+            onClick={handleAttachmentClick}
+            className="p-1 rounded-full text-muted hover:text-primary transition-colors cursor-pointer"
+            title="Attach file"
+            aria-label="Attach file"
+          >
+            <PaperclipIcon className="h-4 w-4" />
+          </button>
+          <button
+            ref={clockTriggerRef}
+            type="button"
+            onClick={() => setPopoverOpen((prev) => !prev)}
+            className="p-1.5 rounded-full text-muted hover:text-accent hover:bg-accent-light transition-colors cursor-pointer"
             title="Pick date & time"
             aria-label="Pick date & time"
           >
             <ClockIcon className="h-4 w-4" />
           </button>
-          <SendLaterPopover open={popoverOpen} onClose={() => setPopoverOpen(false)} startTime={startTime} onSelectTime={setStartTime} />
+          <SendLaterPopover
+            open={popoverOpen}
+            onClose={() => setPopoverOpen(false)}
+            startTime={startTime}
+            onSelectTime={setStartTime}
+            triggerRef={clockTriggerRef}
+          />
           <button
             type="button"
             disabled={mutation.isPending}

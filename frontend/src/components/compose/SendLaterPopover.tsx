@@ -5,20 +5,32 @@ interface SendLaterPopoverProps {
   onClose: () => void;
   startTime: string;
   onSelectTime: (iso: string) => void;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
-export function SendLaterPopover({ open, onClose, startTime, onSelectTime }: SendLaterPopoverProps) {
+export function SendLaterPopover({ open, onClose, startTime, onSelectTime, triggerRef }: SendLaterPopoverProps) {
   const popoverRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(target) &&
+        (!triggerRef?.current || !triggerRef.current.contains(target))
+      ) {
         onClose();
       }
     };
-    if (open) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open, onClose]);
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClick);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClick);
+    };
+  }, [open, onClose, triggerRef]);
 
   if (!open) return null;
 
@@ -55,28 +67,28 @@ export function SendLaterPopover({ open, onClose, startTime, onSelectTime }: Sen
         <button
           type="button"
           onClick={() => setPreset(24)}
-          className="w-full text-left py-1 hover:text-primary transition-colors block"
+          className="w-full text-left py-1 hover:text-primary transition-colors block cursor-pointer"
         >
           Tomorrow
         </button>
         <button
           type="button"
           onClick={() => setPreset(0, 10)}
-          className="w-full text-left py-1 hover:text-primary transition-colors block"
+          className="w-full text-left py-1 hover:text-primary transition-colors block cursor-pointer"
         >
           Tomorrow, 10:00 AM
         </button>
         <button
           type="button"
           onClick={() => setPreset(0, 11)}
-          className="w-full text-left py-1 hover:text-primary transition-colors block"
+          className="w-full text-left py-1 hover:text-primary transition-colors block cursor-pointer"
         >
           Tomorrow, 11:00 AM
         </button>
         <button
           type="button"
           onClick={() => setPreset(0, 20)}
-          className="w-full text-left py-1 hover:text-primary transition-colors block"
+          className="w-full text-left py-1 hover:text-primary transition-colors block cursor-pointer"
         >
           Wednesday, 8:00 PM
         </button>
@@ -86,14 +98,14 @@ export function SendLaterPopover({ open, onClose, startTime, onSelectTime }: Sen
         <button
           type="button"
           onClick={onClose}
-          className="text-xs text-secondary hover:text-primary"
+          className="text-xs text-secondary hover:text-primary cursor-pointer"
         >
           Cancel
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full border border-accent text-accent px-4 py-1 text-xs font-semibold hover:bg-accent-light transition-colors"
+          className="rounded-full border border-accent text-accent px-4 py-1 text-xs font-semibold hover:bg-accent-light transition-colors cursor-pointer"
         >
           Done
         </button>
