@@ -45,12 +45,14 @@ export async function releaseEmail(id: string, scheduledAt: Date) {
   );
 }
 
-export async function markSent(id: string, messageId: string) {
-  await pool.query(
+export async function markSent(id: string, messageId: string): Promise<Date> {
+  const { rows } = await pool.query(
     `UPDATE emails SET status = 'sent', sent_at = now(), message_id = $2, attempts = attempts + 1, error = NULL
-     WHERE id = $1`,
+     WHERE id = $1
+     RETURNING sent_at`,
     [id, messageId],
   );
+  return rows[0].sent_at;
 }
 
 export async function markFailed(id: string, error: string) {

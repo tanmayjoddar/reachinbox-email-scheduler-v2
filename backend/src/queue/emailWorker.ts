@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { claimEmail, getEmailStatus, releaseEmail, markSent, markFailed } from '../services/emailStore';
 import { reserveSlot } from '../services/rateLimiter';
 import { sendMail, type Mail } from '../services/mailer';
+import { updateEmailDoc } from '../services/searchService';
 import type { Sender } from '../services/senders';
 import type { EmailJob } from './emailQueue';
 
@@ -48,7 +49,10 @@ export const emailWorker = new Worker<EmailJob>(
 
     try {
       const messageId = await sendMail(sender, mail);
-      await markSent(email.id, messageId);
+      const sentAt = await markSent(email.id, messageId);
+      updateEmailDoc(email.id, { status: 'sent', sentAt }).catch((err) =>
+        logger.warn({ err, emailId: email.id }, 'elasticsearch update failed'),
+      );
       logger.info({ emailId: email.id, recipient: email.recipient }, 'email sent');
     } catch (err) {
       const attempts = job.attemptsMade + 1;
@@ -57,6 +61,9 @@ export const emailWorker = new Worker<EmailJob>(
         throw err;
       }
       await markFailed(email.id, err instanceof Error ? err.message : String(err));
+      updateEmailDoc(email.id, { status: 'failed', sentAt: null }).catch((updateErr) =>
+        logger.warn({ err: updateErr, emailId: email.id }, 'elasticsearch update failed'),
+      );
       logger.error({ err, emailId: email.id }, 'email failed permanently');
     }
   },

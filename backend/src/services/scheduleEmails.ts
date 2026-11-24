@@ -1,6 +1,8 @@
 import { pool } from '../db/pool';
 import { env } from '../config/env';
 import { addEmailJobs } from '../queue/emailQueue';
+import { indexEmails, type EmailDoc } from './searchService';
+import { logger } from '../utils/logger';
 import type { Sender } from './senders';
 
 export interface ScheduleInput {
@@ -36,7 +38,7 @@ export async function scheduleEmails(
 
   const client = await pool.connect();
   let batchId: string;
-  let rows: { id: string; scheduled_at: Date }[];
+  let rows: { id: string; recipient: string; sender_id: string; scheduled_at: Date }[];
   try {
     await client.query('BEGIN');
     const batch = await client.query(
@@ -49,7 +51,7 @@ export async function scheduleEmails(
     const inserted = await client.query(
       `INSERT INTO emails (batch_id, user_id, sender_id, recipient, scheduled_at)
        SELECT $1, $2, unnest($3::uuid[]), unnest($4::text[]), unnest($5::timestamptz[])
-       RETURNING id, scheduled_at`,
+       RETURNING id, recipient, sender_id, scheduled_at`,
       [batchId, userId, senderIds, input.recipients, scheduledAt.map((d) => d.toISOString())],
     );
     rows = inserted.rows;
@@ -62,6 +64,21 @@ export async function scheduleEmails(
   }
 
   await addEmailJobs(rows.map((row) => ({ id: row.id, scheduledAt: row.scheduled_at })));
+
+  const senderEmailById = new Map(senders.map((sender) => [sender.id, sender.email]));
+  const docs: EmailDoc[] = rows.map((row) => ({
+    id: row.id,
+    userId,
+    batchId,
+    recipient: row.recipient,
+    subject: input.subject,
+    body: input.body,
+    status: 'scheduled',
+    scheduledAt: row.scheduled_at,
+    sentAt: null,
+    senderEmail: senderEmailById.get(row.sender_id)!,
+  }));
+  indexEmails(docs).catch((err) => logger.warn({ err, batchId }, 'elasticsearch index failed'));
 
   return {
     batchId,

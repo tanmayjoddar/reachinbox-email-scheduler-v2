@@ -4,6 +4,7 @@ import { emailWorker } from './queue/emailWorker';
 import { emailQueue } from './queue/emailQueue';
 import { redis } from './redis/connection';
 import { pool } from './db/pool';
+import { closeEs } from './services/searchService';
 import { logger } from './utils/logger';
 
 async function shutdown(signal: string) {
@@ -11,6 +12,7 @@ async function shutdown(signal: string) {
   await emailWorker.close();
   await emailQueue.close();
   await redis.quit();
+  await closeEs();
   await pool.end();
   process.exit(0);
 }
