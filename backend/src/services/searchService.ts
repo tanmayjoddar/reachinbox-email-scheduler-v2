@@ -1,0 +1,108 @@
+import { Client } from '@elastic/elasticsearch';
+import { env } from '../config/env';
+import { logger } from '../utils/logger';
+
+const INDEX = 'emails';
+
+export const es = new Client({ node: env.ELASTICSEARCH_URL });
+
+export interface EmailDoc {
+  id: string;
+  userId: string;
+  batchId: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  status: string;
+  scheduledAt: Date;
+  sentAt: Date | null;
+  senderEmail: string;
+}
+
+let ready = false;
+
+// Only mark ready after the explicit mapping exists: a dynamic auto-create would make ids analyzed text and break the filters.
+export async function ensureIndex() {
+  if (ready) return;
+  const exists = await es.indices.exists({ index: INDEX });
+  if (!exists) {
+    await es.indices.create({
+      index: INDEX,
+      mappings: {
+        properties: {
+          id: { type: 'keyword' },
+          userId: { type: 'keyword' },
+          batchId: { type: 'keyword' },
+          status: { type: 'keyword' },
+          recipient: { type: 'text' },
+          subject: { type: 'text' },
+          body: { type: 'text' },
+          senderEmail: { type: 'text' },
+          scheduledAt: { type: 'date' },
+          sentAt: { type: 'date' },
+        },
+      },
+    });
+  }
+  ready = true;
+}
+
+export async function indexEmails(rows: EmailDoc[]) {
+  if (!rows.length) return;
+  await ensureIndex();
+  const operations = rows.flatMap((doc) => [{ index: { _index: INDEX, _id: doc.id } }, doc]);
+  await es.bulk({ operations: operations as never });
+}
+
+export async function updateEmailDoc(id: string, fields: { status: string; sentAt: Date | null }) {
+  await ensureIndex();
+  try {
+    // scheduledAt is not updated on rate-limit bounces; only status changes matter here.
+    await es.update({ index: INDEX, id, doc: fields });
+  } catch (err) {
+    if ((err as { meta?: { statusCode?: number } }).meta?.statusCode === 404) {
+      logger.warn({ id }, 'elasticsearch doc missing; skipping update');
+      return;
+    }
+    throw err;
+  }
+}
+
+export interface SearchInput {
+  userId: string;
+  q: string;
+  status?: 'scheduled' | 'sent';
+}
+
+export async function searchEmails({ userId, q, status }: SearchInput) {
+  await ensureIndex();
+  const statuses =
+    status === 'scheduled' ? ['scheduled', 'processing'] : status === 'sent' ? ['sent', 'failed'] : undefined;
+
+  const result = await es.search({
+    index: INDEX,
+    size: 20,
+    _source: { excludes: ['body'] },
+    query: {
+      bool: {
+        must: [{ multi_match: { query: q, fields: ['recipient', 'subject', 'body'] } }],
+        filter: [{ term: { userId } }, ...(statuses ? [{ terms: { status: statuses } }] : [])],
+      },
+    },
+  });
+
+  return result.hits.hits.map((hit) => {
+    const doc = hit._source as EmailDoc;
+    return {
+      id: doc.id,
+      recipient: doc.recipient,
+      subject: doc.subject,
+      status: doc.status,
+      scheduledAt: doc.scheduledAt,
+      sentAt: doc.sentAt,
+      senderEmail: doc.senderEmail,
+    };
+  });
+}
+
+export const closeEs = () => es.close();

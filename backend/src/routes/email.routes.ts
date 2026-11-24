@@ -4,6 +4,8 @@ import { requireAuth } from '../middleware/requireAuth';
 import { listSenders } from '../services/senders';
 import { scheduleEmails, type ScheduleInput } from '../services/scheduleEmails';
 import { listEmails } from '../services/emailStore';
+import { searchEmails } from '../services/searchService';
+import { logger } from '../utils/logger';
 
 const scheduleSchema = z.object({
   subject: z.string().trim().min(1),
@@ -20,6 +22,11 @@ const listSchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
 });
 
+const searchSchema = z.object({
+  q: z.string().trim().min(1),
+  status: z.enum(['scheduled', 'sent']).optional(),
+});
+
 export const emailRoutes = Router();
 
 emailRoutes.post('/schedule', requireAuth, async (req, res) => {
@@ -32,6 +39,17 @@ emailRoutes.post('/schedule', requireAuth, async (req, res) => {
   const recipients = [...new Set(input.recipients)];
   const result = await scheduleEmails(req.userId!, { ...input, recipients } satisfies ScheduleInput, senders);
   res.status(201).json(result);
+});
+
+emailRoutes.get('/search', requireAuth, async (req, res) => {
+  const query = searchSchema.parse(req.query);
+  try {
+    const items = await searchEmails({ userId: req.userId!, ...query });
+    res.json({ items });
+  } catch (err) {
+    logger.error({ err }, 'elasticsearch search failed');
+    res.status(503).json({ message: 'search unavailable' });
+  }
 });
 
 emailRoutes.get('/', requireAuth, async (req, res) => {
