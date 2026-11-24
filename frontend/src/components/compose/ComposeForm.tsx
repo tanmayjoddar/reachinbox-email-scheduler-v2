@@ -30,11 +30,10 @@ export function ComposeForm() {
 
   const delayMs = Math.max(0, Number(delaySec) || 0) * 1000;
   const hourlyLimitNum = Math.max(1, Math.floor(Number(hourlyLimit) || 1));
-  const isValid = subject.trim() && body.trim() && recipients.length > 0 && recipients.length <= 5000;
 
   const mutation = useMutation({
     mutationFn: () => scheduleEmails({
-      subject: subject.trim(), body, recipients,
+      subject: subject.trim(), body: body.trim(), recipients,
       startTime: new Date(startTime).toISOString(), delayBetweenMs: delayMs, hourlyLimit: hourlyLimitNum,
     }),
     onSuccess: (res) => {
@@ -50,19 +49,52 @@ export function ComposeForm() {
     },
   });
 
+  const handleScheduleClick = () => {
+    if (recipients.length === 0) {
+      toast.error('Please add at least one recipient email address or upload a list');
+      return;
+    }
+    if (!subject.trim()) {
+      toast.error('Please enter an email subject');
+      return;
+    }
+    if (!body.trim()) {
+      toast.error('Please type an email body in "Type Your Reply"');
+      return;
+    }
+    mutation.mutate();
+  };
+
+  const isComplete = subject.trim() && body.trim() && recipients.length > 0;
+
   return (
     <div className="max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between pb-2 border-b border-border">
         <button type="button" onClick={() => navigate('/dashboard/scheduled')} className="inline-flex items-center gap-2 text-sm font-bold text-primary hover:text-accent transition-colors">
           <BackArrowIcon /><span>Compose New Email</span>
         </button>
-        <div className="relative flex items-center gap-2.5">
-          <PaperclipIcon />
-          <button type="button" onClick={() => setPopoverOpen(!popoverOpen)} className="p-1 text-muted hover:text-accent transition-colors" aria-label="Send Later Options">
+        <div className="relative flex items-center gap-3">
+          <PaperclipIcon className="h-4 w-4 text-muted cursor-pointer hover:text-primary transition-colors" />
+          <button
+            type="button"
+            onClick={() => setPopoverOpen(!popoverOpen)}
+            className="p-1.5 rounded-full text-muted hover:text-accent hover:bg-accent-light transition-colors"
+            title="Pick date & time"
+            aria-label="Pick date & time"
+          >
             <ClockIcon className="h-4 w-4" />
           </button>
           <SendLaterPopover open={popoverOpen} onClose={() => setPopoverOpen(false)} startTime={startTime} onSelectTime={setStartTime} />
-          <button type="button" disabled={!isValid || mutation.isPending} onClick={() => mutation.mutate()} className="rounded-full border border-accent bg-white px-5 py-1 text-xs font-semibold text-accent hover:bg-accent-light transition-colors disabled:opacity-40 disabled:pointer-events-none">
+          <button
+            type="button"
+            disabled={mutation.isPending}
+            onClick={handleScheduleClick}
+            className={`rounded-full border border-accent px-5 py-1.5 text-xs font-semibold transition-colors shadow-sm cursor-pointer ${
+              isComplete
+                ? 'bg-accent text-white hover:bg-accent-hover'
+                : 'bg-white text-accent hover:bg-accent-light'
+            }`}
+          >
             {mutation.isPending ? 'Scheduling...' : 'Send Later'}
           </button>
         </div>
@@ -85,12 +117,15 @@ export function ComposeForm() {
 
         <div className="flex items-center gap-6 py-2.5 text-xs text-secondary">
           <div className="flex items-center gap-2">
-            <label htmlFor="delay-field" className="text-muted">Delay between 2 emails</label>
+            <label htmlFor="delay-field" className="text-muted">Delay between 2 emails (s):</label>
             <input id="delay-field" type="number" min={0} value={delaySec} onChange={(e) => setDelaySec(e.target.value)} className="w-12 h-6 text-center text-xs border border-border-dark rounded-md bg-[#FAFAFA] focus:border-accent focus:outline-none" />
           </div>
           <div className="flex items-center gap-2">
-            <label htmlFor="hourly-field" className="text-muted">Hourly Limit</label>
+            <label htmlFor="hourly-field" className="text-muted">Hourly Limit:</label>
             <input id="hourly-field" type="number" min={1} value={hourlyLimit} onChange={(e) => setHourlyLimit(e.target.value)} className="w-12 h-6 text-center text-xs border border-border-dark rounded-md bg-[#FAFAFA] focus:border-accent focus:outline-none" />
+          </div>
+          <div className="text-[11px] text-muted">
+            Start: {new Date(startTime).toLocaleString()}
           </div>
         </div>
 
