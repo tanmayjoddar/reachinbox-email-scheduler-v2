@@ -11,10 +11,13 @@ export interface EmailItem {
   id: string;
   recipient: string;
   subject: string;
+  body?: string;
   status: EmailStatus;
   scheduledAt: string;
   sentAt: string | null;
   senderEmail: string;
+  isStarred?: boolean;
+  createdAt?: string;
 }
 
 export interface EmailPage {

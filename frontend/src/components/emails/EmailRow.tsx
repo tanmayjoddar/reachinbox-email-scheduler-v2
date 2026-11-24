@@ -4,13 +4,18 @@ import type { EmailItem } from '@/types/api';
 interface EmailRowProps {
   email: EmailItem;
   tab: 'scheduled' | 'sent';
+  onClick?: () => void;
+  onToggleStar?: (id: string) => void;
 }
 
-export function EmailRow({ email, tab }: EmailRowProps) {
+export function EmailRow({ email, tab, onClick, onToggleStar }: EmailRowProps) {
   const time = tab === 'scheduled' ? email.scheduledAt : email.sentAt;
 
   return (
-    <div className="flex items-center gap-4 py-3 px-2 border-b border-border/80 hover:bg-[#FAFAFA] transition-colors group">
+    <div
+      onClick={onClick}
+      className="flex items-center gap-4 py-3 px-2 border-b border-border/80 hover:bg-[#F9FAFB] transition-colors group cursor-pointer"
+    >
       {/* Recipient */}
       <div className="w-36 sm:w-44 shrink-0 text-xs text-primary truncate">
         <span className="font-semibold">To: </span>
@@ -39,10 +44,21 @@ export function EmailRow({ email, tab }: EmailRowProps) {
         <span className="text-muted font-normal">- Scheduled job via {email.senderEmail}</span>
       </div>
 
-      {/* Decorative Star Icon from Figma */}
-      <div className="shrink-0 text-muted/60 group-hover:text-muted">
-        <StarIcon />
-      </div>
+      {/* Star Icon */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleStar?.(email.id);
+        }}
+        className={`shrink-0 p-1 rounded-full transition-colors cursor-pointer ${
+          email.isStarred ? 'text-amber-400' : 'text-muted/40 hover:text-amber-400'
+        }`}
+        title={email.isStarred ? 'Unstar' : 'Star'}
+        aria-label="Star"
+      >
+        <StarIcon filled={email.isStarred} />
+      </button>
     </div>
   );
 }
@@ -55,9 +71,16 @@ function ClockIcon() {
   );
 }
 
-function StarIcon() {
+function StarIcon({ filled }: { filled?: boolean }) {
+  if (filled) {
+    return (
+      <svg className="h-4 w-4 fill-amber-400 text-amber-400" viewBox="0 0 20 20">
+        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+      </svg>
+    );
+  }
   return (
-    <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.2">
+    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.3">
       <path strokeLinecap="round" strokeLinejoin="round" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
     </svg>
   );

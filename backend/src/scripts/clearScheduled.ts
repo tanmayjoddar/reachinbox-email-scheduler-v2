@@ -37,7 +37,6 @@ async function clean() {
   }
 
   // Clear rate limiter tracking keys and Slack notification cooldowns
-  const keys = await redis.keys('{bull:emails}*');
   const rlKeys = await redis.keys('rl*');
   const gateKeys = await redis.keys('gate*');
   const overflowKeys = await redis.keys('overflow*');

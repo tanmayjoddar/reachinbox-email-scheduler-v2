@@ -44,8 +44,11 @@ CREATE TABLE IF NOT EXISTS emails (
   error text,
   message_id text,
   processing_started_at timestamptz,
+  is_starred boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_starred boolean NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS emails_user_status_scheduled_idx ON emails (user_id, status, scheduled_at);
 CREATE INDEX IF NOT EXISTS emails_status_scheduled_idx ON emails (status, scheduled_at);

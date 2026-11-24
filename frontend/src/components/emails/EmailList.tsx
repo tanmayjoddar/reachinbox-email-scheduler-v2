@@ -1,12 +1,15 @@
 import { useState } from 'react';
+import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { useEmails, useEmailSearch } from '@/hooks/useEmails';
 import { EmailRow } from './EmailRow';
+import { EmailDetailView } from './EmailDetailView';
 import { SearchBox } from './SearchBox';
 import { Pagination } from './Pagination';
 import { Spinner } from '@/components/ui/Spinner';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
-import { ApiError } from '@/lib/api';
+import { ApiError, toggleStarEmail, deleteEmail } from '@/lib/api';
 import type { EmailItem } from '@/types/api';
 
 interface EmailListProps {
@@ -32,9 +35,11 @@ const emptyFilterText = {
 };
 
 export function EmailList({ tab }: EmailListProps) {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterOption>(tab === 'scheduled' ? 'scheduled' : 'all');
+  const [selectedEmail, setSelectedEmail] = useState<EmailItem | null>(null);
 
   const listQuery = useEmails(tab, page);
   const searchQuery = useEmailSearch(search, tab);
@@ -46,7 +51,6 @@ export function EmailList({ tab }: EmailListProps) {
     ? searchQuery.data.items
     : listQuery.data?.items ?? [];
 
-  // Apply client-side filter
   if (filter !== 'all' && !isSearching) {
     if (filter === 'scheduled') {
       items = items.filter((e) => e.status === 'scheduled');
@@ -55,12 +59,44 @@ export function EmailList({ tab }: EmailListProps) {
     }
   }
 
+  const starMutation = useMutation({
+    mutationFn: (id: string) => toggleStarEmail(id),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['emails'] });
+      if (selectedEmail && selectedEmail.id === res.id) {
+        setSelectedEmail((prev) => prev ? { ...prev, isStarred: res.isStarred } : null);
+      }
+      toast.success(res.isStarred ? 'Starred email' : 'Unstarred email');
+    },
+    onError: () => toast.error('Failed to update star'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteEmail(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['emails'] });
+      setSelectedEmail(null);
+      toast.success('Email deleted');
+    },
+    onError: () => toast.error('Failed to delete email'),
+  });
+
+  if (selectedEmail) {
+    return (
+      <EmailDetailView
+        email={selectedEmail}
+        onBack={() => setSelectedEmail(null)}
+        onToggleStar={(id) => starMutation.mutate(id)}
+        onDelete={(id) => deleteMutation.mutate(id)}
+      />
+    );
+  }
+
   const total = listQuery.data?.total ?? 0;
   const limit = listQuery.data?.limit ?? 20;
 
   const isLoading = !isSearching && listQuery.isLoading;
   const isError = !isSearching && listQuery.isError;
-
   const hasActiveFilter = filter !== 'all';
 
   return (
@@ -100,7 +136,13 @@ export function EmailList({ tab }: EmailListProps) {
       ) : (
         <div className="divide-y divide-border/80 border-t border-border/80 mt-2">
           {items.map((email) => (
-            <EmailRow key={email.id} email={email} tab={tab} />
+            <EmailRow
+              key={email.id}
+              email={email}
+              tab={tab}
+              onClick={() => setSelectedEmail(email)}
+              onToggleStar={(id) => starMutation.mutate(id)}
+            />
           ))}
         </div>
       )}

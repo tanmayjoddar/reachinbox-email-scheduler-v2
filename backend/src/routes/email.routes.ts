@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../middleware/requireAuth';
 import { listSenders } from '../services/senders';
 import { scheduleEmails, type ScheduleInput } from '../services/scheduleEmails';
-import { listEmails } from '../services/emailStore';
+import { listEmails, getEmailById, toggleEmailStar, deleteEmailById } from '../services/emailStore';
 import { searchEmails } from '../services/searchService';
 import { logger } from '../utils/logger';
 
@@ -56,4 +56,27 @@ emailRoutes.get('/', requireAuth, async (req, res) => {
   const query = listSchema.parse(req.query);
   const { items, total } = await listEmails(req.userId!, query);
   res.json({ items, page: query.page, limit: query.limit, total });
+});
+
+emailRoutes.get('/:id', requireAuth, async (req, res) => {
+  const email = await getEmailById(req.userId!, String(req.params.id));
+  if (!email) {
+    res.status(404).json({ error: 'Email not found' });
+    return;
+  }
+  res.json(email);
+});
+
+emailRoutes.patch('/:id/star', requireAuth, async (req, res) => {
+  const isStarred = await toggleEmailStar(req.userId!, String(req.params.id));
+  res.json({ id: req.params.id, isStarred });
+});
+
+emailRoutes.delete('/:id', requireAuth, async (req, res) => {
+  const deleted = await deleteEmailById(req.userId!, String(req.params.id));
+  if (!deleted) {
+    res.status(404).json({ error: 'Email not found' });
+    return;
+  }
+  res.json({ ok: true });
 });

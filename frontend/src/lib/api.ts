@@ -45,6 +45,18 @@ export function scheduleEmails(input: ScheduleInput): Promise<ScheduleResult> {
   return post<ScheduleResult>('/api/emails/schedule', input);
 }
 
+export function fetchEmailById(id: string): Promise<EmailItem> {
+  return request<EmailItem>(`/api/emails/${id}`);
+}
+
+export function toggleStarEmail(id: string): Promise<{ id: string; isStarred: boolean }> {
+  return request<{ id: string; isStarred: boolean }>(`/api/emails/${id}/star`, { method: 'PATCH' });
+}
+
+export function deleteEmail(id: string): Promise<void> {
+  return request<void>(`/api/emails/${id}`, { method: 'DELETE' });
+}
+
 export function fetchSlackStatus(): Promise<SlackStatus> {
   return request<SlackStatus>('/api/slack/status');
 }

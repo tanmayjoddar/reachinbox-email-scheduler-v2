@@ -74,8 +74,9 @@ export async function listEmails(userId: string, { status, page, limit }: EmailL
   const order = status === 'scheduled' ? 'e.scheduled_at ASC' : 'e.sent_at DESC NULLS LAST';
 
   const items = await pool.query(
-    `SELECT e.id, e.recipient, b.subject, e.status, e.scheduled_at AS "scheduledAt",
-       e.sent_at AS "sentAt", s.email AS "senderEmail"
+    `SELECT e.id, e.recipient, b.subject, b.body, e.status, e.scheduled_at AS "scheduledAt",
+       e.sent_at AS "sentAt", s.email AS "senderEmail", e.is_starred AS "isStarred",
+       e.created_at AS "createdAt"
      FROM emails e
      JOIN batches b ON b.id = e.batch_id
      JOIN senders s ON s.id = e.sender_id
@@ -91,4 +92,37 @@ export async function listEmails(userId: string, { status, page, limit }: EmailL
   );
 
   return { items: items.rows, total: total.rows[0].total as number };
+}
+
+export async function getEmailById(userId: string, emailId: string) {
+  const { rows } = await pool.query(
+    `SELECT e.id, e.recipient, b.subject, b.body, e.status, e.scheduled_at AS "scheduledAt",
+       e.sent_at AS "sentAt", s.email AS "senderEmail", e.is_starred AS "isStarred",
+       e.created_at AS "createdAt"
+     FROM emails e
+     JOIN batches b ON b.id = e.batch_id
+     JOIN senders s ON s.id = e.sender_id
+     WHERE e.id = $1 AND e.user_id = $2`,
+    [emailId, userId],
+  );
+  return rows[0] ?? null;
+}
+
+export async function toggleEmailStar(userId: string, emailId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `UPDATE emails
+     SET is_starred = NOT is_starred
+     WHERE id = $1 AND user_id = $2
+     RETURNING is_starred AS "isStarred"`,
+    [emailId, userId],
+  );
+  return rows[0]?.isStarred ?? false;
+}
+
+export async function deleteEmailById(userId: string, emailId: string): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    `DELETE FROM emails WHERE id = $1 AND user_id = $2`,
+    [emailId, userId],
+  );
+  return (rowCount ?? 0) > 0;
 }
