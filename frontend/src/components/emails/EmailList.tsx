@@ -13,6 +13,8 @@ interface EmailListProps {
   tab: 'scheduled' | 'sent';
 }
 
+type FilterOption = 'all' | 'scheduled' | 'sending';
+
 const emptyText = {
   scheduled: {
     title: 'No scheduled emails',
@@ -24,9 +26,15 @@ const emptyText = {
   },
 };
 
+const emptyFilterText = {
+  title: 'No matching emails',
+  description: 'Try a different search or filter.',
+};
+
 export function EmailList({ tab }: EmailListProps) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<FilterOption>(tab === 'scheduled' ? 'scheduled' : 'all');
 
   const listQuery = useEmails(tab, page);
   const searchQuery = useEmailSearch(search, tab);
@@ -34,23 +42,36 @@ export function EmailList({ tab }: EmailListProps) {
   const isSearching = search.trim().length > 0;
   const searchUnavailable = searchQuery.error instanceof ApiError && searchQuery.error.status === 503;
 
-  const items: EmailItem[] = isSearching && searchQuery.data
+  let items: EmailItem[] = isSearching && searchQuery.data
     ? searchQuery.data.items
     : listQuery.data?.items ?? [];
+
+  // Apply client-side filter
+  if (filter !== 'all' && !isSearching) {
+    if (filter === 'scheduled') {
+      items = items.filter((e) => e.status === 'scheduled');
+    } else if (filter === 'sending') {
+      items = items.filter((e) => e.status === 'processing' || e.status === 'sent');
+    }
+  }
+
   const total = listQuery.data?.total ?? 0;
   const limit = listQuery.data?.limit ?? 20;
 
   const isLoading = !isSearching && listQuery.isLoading;
   const isError = !isSearching && listQuery.isError;
 
+  const hasActiveFilter = filter !== 'all';
+
   return (
     <div className="space-y-6">
-      {/* 1180 fill into 58 hug Search bar with filter & refresh beside it */}
       <SearchBox
         value={search}
         onChange={setSearch}
         placeholder="Search"
         onRefresh={() => listQuery.refetch()}
+        filter={filter}
+        onFilterChange={setFilter}
       />
 
       {searchUnavailable && (
@@ -59,7 +80,6 @@ export function EmailList({ tab }: EmailListProps) {
         </div>
       )}
 
-      {/* Email Inbox Rows */}
       {isLoading ? (
         <div className="flex justify-center items-center py-20">
           <Spinner />
@@ -74,8 +94,8 @@ export function EmailList({ tab }: EmailListProps) {
       ) : items.length === 0 ? (
         <EmptyState
           icon={<MailIcon />}
-          title={emptyText[tab].title}
-          description={emptyText[tab].description}
+          title={hasActiveFilter ? emptyFilterText.title : emptyText[tab].title}
+          description={hasActiveFilter ? emptyFilterText.description : emptyText[tab].description}
         />
       ) : (
         <div className="divide-y divide-border/80 border-t border-border/80 mt-2">
