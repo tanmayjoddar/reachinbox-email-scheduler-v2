@@ -10,6 +10,11 @@ const schema = z.object({
   MIN_DELAY_MS: z.coerce.number().int().nonnegative().default(2000),
   MAX_EMAILS_PER_HOUR_PER_SENDER: z.coerce.number().int().positive().default(200),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  GOOGLE_CLIENT_ID: z.string().min(1),
+  GOOGLE_CLIENT_SECRET: z.string().min(1),
+  BASE_URL: z.string().url().default('http://localhost:3000'),
+  FRONTEND_URL: z.string().url().default('http://localhost:5173'),
+  ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
 });
 
 export const env = schema.parse(process.env);
