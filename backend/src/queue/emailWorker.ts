@@ -26,7 +26,7 @@ export const emailWorker = new Worker<EmailJob>(
       return;
     }
 
-    const slot = await reserveSlot(email.sender_id, email.batch_id, email.hourly_limit, email.delay_ms);
+    const slot = await reserveSlot(email.sender_id, email.user_id, email.hourly_limit, email.delay_ms);
     if (!slot.allowed) {
       const retryAt = new Date(slot.retryAt);
       await releaseEmail(email.id, retryAt);

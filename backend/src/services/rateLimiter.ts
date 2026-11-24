@@ -9,8 +9,8 @@ if senderCount >= tonumber(ARGV[1]) then
   redis.call('EXPIRE', KEYS[4], 10800)
   return {'limit', 'sender', k}
 end
-local batchCount = tonumber(redis.call('GET', KEYS[3]) or '0')
-if batchCount >= tonumber(ARGV[2]) then
+local tenantCount = tonumber(redis.call('GET', KEYS[3]) or '0')
+if tenantCount >= tonumber(ARGV[2]) then
   local k = redis.call('INCR', KEYS[5])
   redis.call('EXPIRE', KEYS[5], 10800)
   return {'limit', 'batch', k}
@@ -33,8 +33,8 @@ export type ReserveResult =
 
 export async function reserveSlot(
   senderId: string,
-  batchId: string,
-  batchLimit: number,
+  userId: string,
+  hourlyLimit: number,
   batchDelayMs: number,
 ): Promise<ReserveResult> {
   const now = Date.now();
@@ -42,9 +42,9 @@ export async function reserveSlot(
   const keys = [
     `gate:${senderId}`,
     `rl:${senderId}:${window}`,
-    `rlb:${batchId}:${window}`,
+    `rlu:${userId}:${window}`,
     `overflow:s:${senderId}:${window}`,
-    `overflow:b:${batchId}:${window}`,
+    `overflow:u:${userId}:${window}`,
   ];
 
   const reply = (await redis.eval(
@@ -52,7 +52,7 @@ export async function reserveSlot(
     5,
     ...keys,
     env.MAX_EMAILS_PER_HOUR_PER_SENDER,
-    batchLimit,
+    hourlyLimit,
     env.MIN_DELAY_MS,
   )) as [string, string, number];
 
@@ -65,7 +65,7 @@ export async function reserveSlot(
   }
 
   // Place each bounced job straight into its final slot (in arrival order) so it moves once instead of re-bouncing every hour.
-  const limit = scope === 'sender' ? env.MAX_EMAILS_PER_HOUR_PER_SENDER : batchLimit;
+  const limit = scope === 'sender' ? env.MAX_EMAILS_PER_HOUR_PER_SENDER : hourlyLimit;
   const spacing = Math.max(batchDelayMs, env.MIN_DELAY_MS);
   const k = value;
   const retryAt = nextHourStart(now) + Math.floor((k - 1) / limit) * HOUR + ((k - 1) % limit) * spacing;
