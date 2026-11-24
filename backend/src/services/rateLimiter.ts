@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import { pool } from '../db/pool';
 import { redis } from '../redis/connection';
 import { HOUR, hourWindow, nextHourStart } from '../utils/time';
 
@@ -39,10 +40,29 @@ export async function reserveSlot(
 ): Promise<ReserveResult> {
   const now = Date.now();
   const window = hourWindow(now);
+  const senderKey = `rl:${senderId}:${window}`;
+  const userKey = `rlu:${userId}:${window}`;
+
+  // Hydrate user key from DB if missing in Redis (e.g. after code reload or restart)
+  const userCountInRedis = await redis.get(userKey);
+  if (userCountInRedis === null) {
+    const windowStartSec = window * 3600;
+    try {
+      const { rows } = await pool.query(
+        `SELECT count(*)::int AS sent FROM emails WHERE user_id = $1 AND sent_at >= to_timestamp($2)`,
+        [userId, windowStartSec],
+      );
+      const sentCount = rows[0]?.sent ?? 0;
+      await redis.set(userKey, sentCount.toString(), 'EX', 7200, 'NX');
+    } catch {
+      // Ignore DB query error if any and fallback
+    }
+  }
+
   const keys = [
     `gate:${senderId}`,
-    `rl:${senderId}:${window}`,
-    `rlu:${userId}:${window}`,
+    senderKey,
+    userKey,
     `overflow:s:${senderId}:${window}`,
     `overflow:u:${userId}:${window}`,
   ];
