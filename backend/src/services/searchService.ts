@@ -4,7 +4,10 @@ import { logger } from '../utils/logger';
 
 const INDEX = 'emails';
 
-export const es = new Client({ node: env.ELASTICSEARCH_URL });
+const esNode = env.ELASTICSEARCH_URL.startsWith('http')
+  ? env.ELASTICSEARCH_URL
+  : `https://${env.ELASTICSEARCH_URL}`;
+export const es = new Client({ node: esNode });
 
 export interface EmailDoc {
   id: string;
