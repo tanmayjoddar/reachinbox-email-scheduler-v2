@@ -17,12 +17,10 @@ export function ComposeForm() {
   const { data: user } = useAuth();
   const clockTriggerRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [history, setHistory] = useState<string[]>(['']);
-  const [historyIdx, setHistoryIdx] = useState(0);
 
   const [recipients, setRecipients] = useState<string[]>([]);
   const [delaySec, setDelaySec] = useState('2');
@@ -39,12 +37,6 @@ export function ComposeForm() {
   const delayMs = Math.max(0, Number(delaySec) || 0) * 1000;
   const hourlyLimitNum = Math.max(1, Math.floor(Number(hourlyLimit) || 1));
 
-  const setBodyWithHistory = (newVal: string) => {
-    setBody(newVal);
-    setHistory((prev) => [...prev.slice(0, historyIdx + 1), newVal]);
-    setHistoryIdx((prev) => prev + 1);
-  };
-
   const validate = (): boolean => {
     if (recipients.length === 0) {
       toast.error('Please add at least one recipient email address or click "Upload List"');
@@ -54,7 +46,8 @@ export function ComposeForm() {
       toast.error('Please enter an email subject');
       return false;
     }
-    if (!body.trim()) {
+    const textContent = editorRef.current?.innerText?.trim() || '';
+    if (!textContent && !body.trim()) {
       toast.error('Please type your message in "Type Your Reply..."');
       return false;
     }
@@ -64,9 +57,10 @@ export function ComposeForm() {
   const scheduleMutation = useMutation({
     mutationFn: () => {
       const sendAt = selectedFutureTime ? new Date(selectedFutureTime).toISOString() : new Date().toISOString();
+      const content = editorRef.current?.innerHTML?.trim() || body.trim();
       return scheduleEmails({
         subject: subject.trim(),
-        body: body.trim(),
+        body: content,
         recipients,
         startTime: sendAt,
         delayBetweenMs: delayMs,
@@ -85,6 +79,10 @@ export function ComposeForm() {
       toast.success(`${label} ${res.total} emails (${formatDateTime(res.firstSendAt)} \u2013 ${formatDateTime(res.lastSendAt)})`);
       setSelectedFutureTime(null);
       setAttachments([]);
+      if (editorRef.current) {
+        editorRef.current.innerHTML = '';
+      }
+      setBody('');
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       navigate(isScheduled ? '/dashboard/scheduled' : '/dashboard/sent');
     },
@@ -130,95 +128,58 @@ export function ComposeForm() {
   };
 
   const handleFormat = (command: string) => {
-    const el = textareaRef.current;
+    const el = editorRef.current;
     if (!el) return;
-
-    if (command === 'undo') {
-      if (historyIdx > 0) {
-        const nextIdx = historyIdx - 1;
-        setHistoryIdx(nextIdx);
-        setBody(history[nextIdx] ?? '');
-      }
-      return;
-    }
-    if (command === 'redo') {
-      if (historyIdx < history.length - 1) {
-        const nextIdx = historyIdx + 1;
-        setHistoryIdx(nextIdx);
-        setBody(history[nextIdx] ?? '');
-      }
-      return;
-    }
-
-    const start = el.selectionStart ?? 0;
-    const end = el.selectionEnd ?? 0;
-    const selected = body.slice(start, end);
-    const before = body.slice(0, start);
-    const after = body.slice(end);
-
-    let replacement = '';
-    let cursorOffset = 0;
+    el.focus();
 
     switch (command) {
+      case 'undo':
+        document.execCommand('undo', false);
+        break;
+      case 'redo':
+        document.execCommand('redo', false);
+        break;
       case 'bold':
-        replacement = selected ? `**${selected}**` : '**bold text**';
-        cursorOffset = selected ? replacement.length : 2;
+        document.execCommand('bold', false);
         break;
       case 'italic':
-        replacement = selected ? `*${selected}*` : '*italic text*';
-        cursorOffset = selected ? replacement.length : 1;
+        document.execCommand('italic', false);
         break;
       case 'underline':
-        replacement = selected ? `<u>${selected}</u>` : '<u>underlined text</u>';
-        cursorOffset = selected ? replacement.length : 3;
+        document.execCommand('underline', false);
         break;
       case 'strikethrough':
-        replacement = selected ? `~~${selected}~~` : '~~strikethrough~~';
-        cursorOffset = selected ? replacement.length : 2;
+        document.execCommand('strikeThrough', false);
         break;
       case 'blockquote':
-        replacement = selected ? `\n> ${selected}\n` : '\n> Your quote here\n';
-        cursorOffset = replacement.length;
-        break;
-      case 'orderedList':
-        replacement = selected ? `\n1. ${selected}\n` : '\n1. First item\n2. Second item\n';
-        cursorOffset = replacement.length;
-        break;
-      case 'unorderedList':
-        replacement = selected ? `\n• ${selected}\n` : '\n• Bullet point 1\n• Bullet point 2\n';
-        cursorOffset = replacement.length;
+        document.execCommand('formatBlock', false, '<blockquote>');
         break;
       case 'fontSize':
-        replacement = selected ? `\n## ${selected}\n` : '\n## Heading\n';
-        cursorOffset = replacement.length;
+        document.execCommand('formatBlock', false, '<h3>');
+        break;
+      case 'orderedList':
+        document.execCommand('insertOrderedList', false);
+        break;
+      case 'unorderedList':
+        document.execCommand('insertUnorderedList', false);
         break;
       case 'indent':
-        replacement = selected ? `    ${selected}` : '    ';
-        cursorOffset = replacement.length;
+        document.execCommand('indent', false);
         break;
       case 'outdent':
-        replacement = selected.replace(/^ {1,4}/gm, '');
-        cursorOffset = replacement.length;
+        document.execCommand('outdent', false);
         break;
       case 'align':
-        replacement = selected ? `\n${selected}\n` : '\nCentered text\n';
-        cursorOffset = replacement.length;
+        document.execCommand('justifyCenter', false);
         break;
       default:
-        return;
+        break;
     }
 
-    const nextBody = before + replacement + after;
-    setBodyWithHistory(nextBody);
-
-    setTimeout(() => {
-      el.focus();
-      const pos = start + cursorOffset;
-      el.setSelectionRange(pos, pos);
-    }, 0);
+    setBody(el.innerHTML);
   };
 
-  const isComplete = subject.trim() && body.trim() && recipients.length > 0;
+  const isComplete = subject.trim() && (body.trim() || Boolean(editorRef.current?.innerText?.trim())) && recipients.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">
@@ -250,7 +211,7 @@ export function ComposeForm() {
             onChange={handleFileAttach}
           />
 
-          {/* Clock icon to pick date & time for send later */}
+          {/* Clock icon for scheduling send later */}
           <button
             ref={clockTriggerRef}
             type="button"
@@ -358,15 +319,15 @@ export function ComposeForm() {
 
         <div className="rounded-2xl bg-[#F8F9FA] p-4 min-h-[380px] flex flex-col gap-2 mt-2">
           <RichToolbar onFormat={handleFormat} />
-          <label htmlFor="reply-body" className="sr-only">Type Your Reply</label>
-          <textarea
-            ref={textareaRef}
-            id="reply-body"
-            rows={9}
-            value={body}
-            onChange={(e) => setBodyWithHistory(e.target.value)}
-            placeholder="Type Your Reply..."
-            className="w-full flex-1 p-2 text-xs text-primary placeholder:text-muted bg-transparent focus:outline-none resize-y"
+          <div
+            ref={editorRef}
+            contentEditable
+            role="textbox"
+            aria-multiline="true"
+            aria-label="Type Your Reply"
+            data-placeholder="Type Your Reply..."
+            onInput={() => setBody(editorRef.current?.innerHTML ?? '')}
+            className="rich-editor rich-text-content w-full flex-1 p-2 text-xs text-primary bg-transparent focus:outline-none min-h-[220px] overflow-y-auto"
           />
           <AttachmentList
             attachments={attachments}

@@ -3,65 +3,70 @@ interface RichToolbarProps {
 }
 
 export function RichToolbar({ onFormat }: RichToolbarProps) {
-  const btn = 'p-1 rounded hover:bg-[#E8E9EB] text-muted hover:text-primary transition-colors cursor-pointer';
+  const btn = 'p-1 rounded hover:bg-[#E8E9EB] text-muted hover:text-primary transition-colors cursor-pointer select-none';
   const sep = 'w-px h-4 bg-border-dark mx-0.5';
+
+  const handleAction = (e: React.MouseEvent, cmd: string, val?: string) => {
+    e.preventDefault();
+    onFormat(cmd, val);
+  };
 
   return (
     <div className="rounded-xl bg-white shadow-sm border border-border-dark px-3 py-1.5 flex items-center gap-1 text-sm text-muted flex-wrap">
       {/* Undo / Redo */}
-      <button type="button" className={btn} onClick={() => onFormat('undo')} title="Undo"><UndoIcon /></button>
-      <button type="button" className={btn} onClick={() => onFormat('redo')} title="Redo"><RedoIcon /></button>
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'undo')} title="Undo"><UndoIcon /></button>
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'redo')} title="Redo"><RedoIcon /></button>
 
       {/* Font Size */}
-      <button type="button" className={btn} onClick={() => onFormat('fontSize')} title="Font Size">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'fontSize')} title="Font Size / Heading">
         <span className="text-xs font-semibold text-primary flex items-center">T<span className="text-[8px] ml-px">↕</span></span>
       </button>
 
       <div className={sep} />
 
       {/* Bold / Italic / Underline */}
-      <button type="button" className={btn} onClick={() => onFormat('bold')} title="Bold">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'bold')} title="Bold">
         <span className="font-bold text-sm">B</span>
       </button>
-      <button type="button" className={btn} onClick={() => onFormat('italic')} title="Italic">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'italic')} title="Italic">
         <span className="italic text-sm">I</span>
       </button>
-      <button type="button" className={btn} onClick={() => onFormat('underline')} title="Underline">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'underline')} title="Underline">
         <span className="underline text-sm">U</span>
       </button>
 
       {/* Text Align */}
-      <button type="button" className={btn} onClick={() => onFormat('align')} title="Text Alignment">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'align')} title="Text Alignment">
         <AlignIcon />
       </button>
 
       <div className={sep} />
 
       {/* Ordered List */}
-      <button type="button" className={btn} onClick={() => onFormat('orderedList')} title="Ordered List">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'orderedList')} title="Ordered List">
         <OrderedListIcon />
       </button>
       {/* Unordered List */}
-      <button type="button" className={btn} onClick={() => onFormat('unorderedList')} title="Unordered List">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'unorderedList')} title="Unordered List">
         <UnorderedListIcon />
       </button>
 
       {/* Indent / Outdent */}
-      <button type="button" className={btn} onClick={() => onFormat('indent')} title="Indent">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'indent')} title="Indent">
         <IndentIcon />
       </button>
-      <button type="button" className={btn} onClick={() => onFormat('outdent')} title="Outdent">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'outdent')} title="Outdent">
         <OutdentIcon />
       </button>
 
       <div className={sep} />
 
       {/* Blockquote */}
-      <button type="button" className={btn} onClick={() => onFormat('blockquote')} title="Blockquote">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'blockquote')} title="Blockquote">
         <BlockquoteIcon />
       </button>
       {/* Strikethrough */}
-      <button type="button" className={btn} onClick={() => onFormat('strikethrough')} title="Strikethrough">
+      <button type="button" className={btn} onMouseDown={(e) => e.preventDefault()} onClick={(e) => handleAction(e, 'strikethrough')} title="Strikethrough">
         <StrikethroughIcon />
       </button>
     </div>
