@@ -7,6 +7,13 @@ export interface User {
 
 export type EmailStatus = 'scheduled' | 'processing' | 'sent' | 'failed';
 
+export interface EmailAttachment {
+  name: string;
+  size: string;
+  type?: string;
+  url?: string;
+}
+
 export interface EmailItem {
   id: string;
   recipient: string;
@@ -18,6 +25,7 @@ export interface EmailItem {
   senderEmail: string;
   isStarred?: boolean;
   createdAt?: string;
+  attachments?: EmailAttachment[];
 }
 
 export interface EmailPage {
@@ -34,6 +42,7 @@ export interface ScheduleInput {
   startTime: string;
   delayBetweenMs: number;
   hourlyLimit: number;
+  attachments?: EmailAttachment[];
 }
 
 export interface ScheduleResult {

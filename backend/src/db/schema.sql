@@ -24,12 +24,15 @@ CREATE TABLE IF NOT EXISTS batches (
   user_id uuid NOT NULL REFERENCES users(id),
   subject text NOT NULL,
   body text NOT NULL,
+  attachments jsonb DEFAULT '[]'::jsonb,
   start_at timestamptz NOT NULL,
   delay_ms int NOT NULL,
   hourly_limit int NOT NULL,
   total int NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE batches ADD COLUMN IF NOT EXISTS attachments jsonb DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS emails (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

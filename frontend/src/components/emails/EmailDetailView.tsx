@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/hooks/useAuth';
+import { FormattedBody } from './FormattedBody';
 import type { EmailItem } from '@/types/api';
 
 interface EmailDetailViewProps {
@@ -19,9 +20,10 @@ export function EmailDetailView({ email, onBack, onToggleStar, onDelete }: Email
     onToggleStar(email.id);
   };
 
-  const senderInitial = (email.senderEmail[0] ?? 'S').toUpperCase();
+  const senderInitial = (email.senderEmail?.[0] ?? 'S').toUpperCase();
   const dateFormatted = formatDateTime(email.sentAt ?? email.scheduledAt);
   const codeSnippet = email.id.replace(/-/g, '').slice(0, 14).toUpperCase();
+  const attachments = email.attachments ?? [];
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -38,7 +40,7 @@ export function EmailDetailView({ email, onBack, onToggleStar, onDelete }: Email
             <BackArrowIcon />
           </button>
           <h2 className="text-sm font-semibold text-primary truncate">
-            {email.subject} <span className="text-muted font-normal">| {codeSnippet}</span>
+            {email.subject} <span className="text-muted font-normal text-xs">| {codeSnippet}</span>
           </h2>
         </div>
 
@@ -113,72 +115,62 @@ export function EmailDetailView({ email, onBack, onToggleStar, onDelete }: Email
         </div>
       </div>
 
-      {/* Email Message Content */}
+      {/* Email Message Content - 100% real body with formatting */}
       <div className="text-xs text-secondary leading-relaxed space-y-3 pt-2">
-        <p className="text-primary font-medium">Hey {email.recipient.split('@')[0]},</p>
+        <p className="text-primary font-medium">To: {email.recipient},</p>
 
         {email.body ? (
-          <div className="whitespace-pre-line text-xs text-primary/90">
-            {email.body}
-          </div>
+          <FormattedBody content={email.body} />
         ) : (
-          <p>You&apos;ve just RECEIVED something</p>
+          <p className="italic text-muted">No message body provided.</p>
         )}
-
-        {/* Exclusive transformation highlight banner from Figma */}
-        <div className="rounded-md border-l-4 border-amber-400 bg-amber-50/70 p-3.5 text-xs text-amber-950 space-y-1.5 my-3">
-          <p className="font-semibold flex items-center gap-1.5">
-            <span>⚡</span>
-            <span>Extremely Exclusive—Only 4 Spots Worldwide Per Year | $25,000 investment</span>
-            <span>⚡</span>
-          </p>
-          <p className="text-[11px] text-amber-900/90">
-            To explore securing your private transformation, simply reply right now with <strong className="font-bold underline">&quot;FLY OUT FIX&quot;</strong>.
-          </p>
-        </div>
-
-        <p className="pt-2 text-muted">Your coach for world-class performance,</p>
-        <p className="font-semibold text-primary">Grant</p>
-        <p className="text-[11px] italic text-muted pt-1">
-          P.S. Always remember that you can develop world class technique! 🚀
-        </p>
       </div>
 
-      {/* Attachments Section with Figma tennis coach thumbnails */}
-      <div className="pt-4 border-t border-border/80">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-          <AttachmentCard
-            title="Tennis_Coach_Profile.png"
-            size="1.2 MB"
-            courtHue="from-blue-600 to-sky-400"
-          />
-          <AttachmentCard
-            title="Tennis_Coach_Profile2.png"
-            size="1.2 MB"
-            courtHue="from-sky-500 to-blue-700"
-          />
+      {/* Attachments Section - ONLY renders real attachments attached to this email */}
+      {attachments.length > 0 && (
+        <div className="pt-4 border-t border-border/80 space-y-2">
+          <p className="text-xs font-semibold text-primary">
+            Attachments ({attachments.length})
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {attachments.map((att, idx) => (
+              <RealAttachmentCard key={idx} name={att.name} size={att.size} url={att.url} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function AttachmentCard({ title, size, courtHue }: { title: string; size: string; courtHue: string }) {
+function RealAttachmentCard({ name, size, url }: { name: string; size: string; url?: string }) {
+  const isImage = url?.startsWith('data:image') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name);
+
   return (
-    <div className="rounded-xl border border-border overflow-hidden bg-white hover:shadow-md transition-shadow cursor-pointer group">
-      <div className={`h-28 bg-gradient-to-br ${courtHue} relative flex items-center justify-center overflow-hidden`}>
-        {/* Tennis net simulation graphic */}
-        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:8px_8px]" />
-        <div className="absolute bottom-0 inset-x-0 h-4 bg-white/30 backdrop-blur-xs flex items-center justify-center">
-          <div className="h-0.5 w-full bg-white/60" />
+    <div className="rounded-xl border border-border overflow-hidden bg-white hover:shadow-md transition-shadow">
+      {isImage && url ? (
+        <div className="h-28 bg-[#F4F5F7] relative flex items-center justify-center overflow-hidden">
+          <img src={url} alt={name} className="h-full w-full object-cover" />
         </div>
-        <div className="h-10 w-10 rounded-full bg-red-500/90 text-white flex items-center justify-center text-xs font-bold shadow-lg transform group-hover:scale-105 transition-transform">
-          🎾
+      ) : (
+        <div className="h-24 bg-[#F4F5F7] flex items-center justify-center text-muted">
+          <DocumentFileIcon />
         </div>
-      </div>
-      <div className="p-2.5">
-        <p className="text-xs font-medium text-primary truncate">{title}</p>
-        <p className="text-[10px] text-muted">{size}</p>
+      )}
+      <div className="p-2.5 flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-primary truncate" title={name}>{name}</p>
+          <p className="text-[10px] text-muted">{size}</p>
+        </div>
+        {url && (
+          <a
+            href={url}
+            download={name}
+            className="text-[11px] font-semibold text-accent hover:underline shrink-0"
+          >
+            View
+          </a>
+        )}
       </div>
     </div>
   );
@@ -219,6 +211,14 @@ function TrashIcon() {
   return (
     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
       <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+    </svg>
+  );
+}
+
+function DocumentFileIcon() {
+  return (
+    <svg className="h-8 w-8 text-muted/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     </svg>
   );
 }

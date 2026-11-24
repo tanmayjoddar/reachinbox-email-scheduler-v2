@@ -17,9 +17,13 @@ export function ComposeForm() {
   const { data: user } = useAuth();
   const clockTriggerRef = useRef<HTMLButtonElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [history, setHistory] = useState<string[]>(['']);
+  const [historyIdx, setHistoryIdx] = useState(0);
+
   const [recipients, setRecipients] = useState<string[]>([]);
   const [delaySec, setDelaySec] = useState('2');
   const [hourlyLimit, setHourlyLimit] = useState('100');
@@ -34,6 +38,12 @@ export function ComposeForm() {
 
   const delayMs = Math.max(0, Number(delaySec) || 0) * 1000;
   const hourlyLimitNum = Math.max(1, Math.floor(Number(hourlyLimit) || 1));
+
+  const setBodyWithHistory = (newVal: string) => {
+    setBody(newVal);
+    setHistory((prev) => [...prev.slice(0, historyIdx + 1), newVal]);
+    setHistoryIdx((prev) => prev + 1);
+  };
 
   const validate = (): boolean => {
     if (recipients.length === 0) {
@@ -61,14 +71,20 @@ export function ComposeForm() {
         startTime: sendAt,
         delayBetweenMs: delayMs,
         hourlyLimit: hourlyLimitNum,
+        attachments: attachments.map((a) => ({
+          name: a.name,
+          size: a.size,
+          type: a.type,
+          url: a.url,
+        })),
       });
     },
     onSuccess: (res) => {
       const isScheduled = Boolean(selectedFutureTime);
       const label = isScheduled ? 'Scheduled' : 'Sent';
       toast.success(`${label} ${res.total} emails (${formatDateTime(res.firstSendAt)} \u2013 ${formatDateTime(res.lastSendAt)})`);
-      // Reset selected future time so next send defaults to immediate
       setSelectedFutureTime(null);
+      setAttachments([]);
       queryClient.invalidateQueries({ queryKey: ['emails'] });
       navigate(isScheduled ? '/dashboard/scheduled' : '/dashboard/sent');
     },
@@ -84,22 +100,122 @@ export function ComposeForm() {
     if (validate()) scheduleMutation.mutate();
   };
 
-  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     const newItems: Attachment[] = [];
+
     for (let i = 0; i < files.length; i++) {
       const f = files[i];
       const sizeStr = f.size > 1024 * 1024 ? `${(f.size / (1024 * 1024)).toFixed(1)} MB` : `${Math.round(f.size / 1024)} KB`;
-      newItems.push({ id: `${Date.now()}-${i}`, name: f.name, size: sizeStr, url: URL.createObjectURL(f) });
+      const dataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(f);
+      });
+
+      newItems.push({
+        id: `${Date.now()}-${i}`,
+        name: f.name,
+        size: sizeStr,
+        type: f.type,
+        url: dataUrl || URL.createObjectURL(f),
+      });
     }
+
     setAttachments((prev) => [...prev, ...newItems]);
     toast.success(`Attached ${files.length} file${files.length > 1 ? 's' : ''}`);
     e.target.value = '';
   };
 
   const handleFormat = (command: string) => {
-    toast.info(`${command.charAt(0).toUpperCase() + command.slice(1)} applied`);
+    const el = textareaRef.current;
+    if (!el) return;
+
+    if (command === 'undo') {
+      if (historyIdx > 0) {
+        const nextIdx = historyIdx - 1;
+        setHistoryIdx(nextIdx);
+        setBody(history[nextIdx] ?? '');
+      }
+      return;
+    }
+    if (command === 'redo') {
+      if (historyIdx < history.length - 1) {
+        const nextIdx = historyIdx + 1;
+        setHistoryIdx(nextIdx);
+        setBody(history[nextIdx] ?? '');
+      }
+      return;
+    }
+
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? 0;
+    const selected = body.slice(start, end);
+    const before = body.slice(0, start);
+    const after = body.slice(end);
+
+    let replacement = '';
+    let cursorOffset = 0;
+
+    switch (command) {
+      case 'bold':
+        replacement = selected ? `**${selected}**` : '**bold text**';
+        cursorOffset = selected ? replacement.length : 2;
+        break;
+      case 'italic':
+        replacement = selected ? `*${selected}*` : '*italic text*';
+        cursorOffset = selected ? replacement.length : 1;
+        break;
+      case 'underline':
+        replacement = selected ? `<u>${selected}</u>` : '<u>underlined text</u>';
+        cursorOffset = selected ? replacement.length : 3;
+        break;
+      case 'strikethrough':
+        replacement = selected ? `~~${selected}~~` : '~~strikethrough~~';
+        cursorOffset = selected ? replacement.length : 2;
+        break;
+      case 'blockquote':
+        replacement = selected ? `\n> ${selected}\n` : '\n> Your quote here\n';
+        cursorOffset = replacement.length;
+        break;
+      case 'orderedList':
+        replacement = selected ? `\n1. ${selected}\n` : '\n1. First item\n2. Second item\n';
+        cursorOffset = replacement.length;
+        break;
+      case 'unorderedList':
+        replacement = selected ? `\n• ${selected}\n` : '\n• Bullet point 1\n• Bullet point 2\n';
+        cursorOffset = replacement.length;
+        break;
+      case 'fontSize':
+        replacement = selected ? `\n## ${selected}\n` : '\n## Heading\n';
+        cursorOffset = replacement.length;
+        break;
+      case 'indent':
+        replacement = selected ? `    ${selected}` : '    ';
+        cursorOffset = replacement.length;
+        break;
+      case 'outdent':
+        replacement = selected.replace(/^ {1,4}/gm, '');
+        cursorOffset = replacement.length;
+        break;
+      case 'align':
+        replacement = selected ? `\n${selected}\n` : '\nCentered text\n';
+        cursorOffset = replacement.length;
+        break;
+      default:
+        return;
+    }
+
+    const nextBody = before + replacement + after;
+    setBodyWithHistory(nextBody);
+
+    setTimeout(() => {
+      el.focus();
+      const pos = start + cursorOffset;
+      el.setSelectionRange(pos, pos);
+    }, 0);
   };
 
   const isComplete = subject.trim() && body.trim() && recipients.length > 0;
@@ -121,7 +237,7 @@ export function ComposeForm() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="p-1.5 rounded-full text-muted hover:text-primary transition-colors cursor-pointer"
-            title="Attach file"
+            title="Attach picture or document"
           >
             <PaperclipIcon className="h-4 w-4" />
           </button>
@@ -244,10 +360,11 @@ export function ComposeForm() {
           <RichToolbar onFormat={handleFormat} />
           <label htmlFor="reply-body" className="sr-only">Type Your Reply</label>
           <textarea
+            ref={textareaRef}
             id="reply-body"
             rows={9}
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={(e) => setBodyWithHistory(e.target.value)}
             placeholder="Type Your Reply..."
             className="w-full flex-1 p-2 text-xs text-primary placeholder:text-muted bg-transparent focus:outline-none resize-y"
           />

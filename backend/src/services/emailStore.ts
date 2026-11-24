@@ -74,7 +74,8 @@ export async function listEmails(userId: string, { status, page, limit }: EmailL
   const order = status === 'scheduled' ? 'e.scheduled_at ASC' : 'e.sent_at DESC NULLS LAST';
 
   const items = await pool.query(
-    `SELECT e.id, e.recipient, b.subject, b.body, e.status, e.scheduled_at AS "scheduledAt",
+    `SELECT e.id, e.recipient, b.subject, b.body, COALESCE(b.attachments, '[]'::jsonb) AS "attachments",
+       e.status, e.scheduled_at AS "scheduledAt",
        e.sent_at AS "sentAt", s.email AS "senderEmail", e.is_starred AS "isStarred",
        e.created_at AS "createdAt"
      FROM emails e
@@ -96,7 +97,8 @@ export async function listEmails(userId: string, { status, page, limit }: EmailL
 
 export async function getEmailById(userId: string, emailId: string) {
   const { rows } = await pool.query(
-    `SELECT e.id, e.recipient, b.subject, b.body, e.status, e.scheduled_at AS "scheduledAt",
+    `SELECT e.id, e.recipient, b.subject, b.body, COALESCE(b.attachments, '[]'::jsonb) AS "attachments",
+       e.status, e.scheduled_at AS "scheduledAt",
        e.sent_at AS "sentAt", s.email AS "senderEmail", e.is_starred AS "isStarred",
        e.created_at AS "createdAt"
      FROM emails e

@@ -5,6 +5,13 @@ import { indexEmails, type EmailDoc } from './searchService';
 import { logger } from '../utils/logger';
 import type { Sender } from './senders';
 
+export interface EmailAttachment {
+  name: string;
+  size: string;
+  type?: string;
+  url?: string;
+}
+
 export interface ScheduleInput {
   subject: string;
   body: string;
@@ -12,6 +19,7 @@ export interface ScheduleInput {
   startTime: string;
   delayBetweenMs: number;
   hourlyLimit: number;
+  attachments?: EmailAttachment[];
 }
 
 export interface ScheduleResult {
@@ -42,9 +50,9 @@ export async function scheduleEmails(
   try {
     await client.query('BEGIN');
     const batch = await client.query(
-      `INSERT INTO batches (user_id, subject, body, start_at, delay_ms, hourly_limit, total)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [userId, input.subject, input.body, new Date(start), effectiveDelay, input.hourlyLimit, total],
+      `INSERT INTO batches (user_id, subject, body, attachments, start_at, delay_ms, hourly_limit, total)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8) RETURNING id`,
+      [userId, input.subject, input.body, JSON.stringify(input.attachments ?? []), new Date(start), effectiveDelay, input.hourlyLimit, total],
     );
     batchId = batch.rows[0].id;
 

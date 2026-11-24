@@ -14,6 +14,12 @@ const scheduleSchema = z.object({
   startTime: z.string().datetime({ offset: true }),
   delayBetweenMs: z.number().int().nonnegative(),
   hourlyLimit: z.number().int().positive(),
+  attachments: z.array(z.object({
+    name: z.string(),
+    size: z.string(),
+    type: z.string().optional(),
+    url: z.string().optional(),
+  })).optional(),
 });
 
 const listSchema = z.object({
