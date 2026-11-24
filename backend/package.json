@@ -10,12 +10,16 @@
     "start:worker": "node --env-file=.env dist/worker.js",
     "migrate": "tsx --env-file=.env src/db/migrate.ts",
     "seed:senders": "tsx --env-file=.env src/scripts/seedSenders.ts",
-    "make-token": "tsx --env-file=.env src/scripts/makeToken.ts"
+    "make-token": "tsx --env-file=.env src/scripts/makeToken.ts",
+    "reindex": "tsx --env-file=.env src/scripts/reindex.ts"
   },
   "dependencies": {
+    "@elastic/elasticsearch": "^8.19.2",
     "bullmq": "^5.34.2",
     "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
     "express": "^5.0.1",
+    "google-auth-library": "^11.3.4",
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.16",
@@ -25,6 +29,7 @@
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.8",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.0",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.5",
