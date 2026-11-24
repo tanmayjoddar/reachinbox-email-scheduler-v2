@@ -15,6 +15,12 @@ const schema = z.object({
   BASE_URL: z.string().url().default('http://localhost:3000'),
   FRONTEND_URL: z.string().url().default('http://localhost:5173'),
   ELASTICSEARCH_URL: z.string().url().default('http://localhost:9200'),
+  SLACK_CLIENT_ID: z.string().min(1),
+  SLACK_CLIENT_SECRET: z.string().min(1),
+  SLACK_REDIRECT_URL: z.string().url(),
+  ADMIN_USER: z.string().min(1),
+  ADMIN_PASS: z.string().min(1),
+  USER_ID: z.string().uuid().optional(),
 });
 
 export const env = schema.parse(process.env);

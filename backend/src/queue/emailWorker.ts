@@ -6,6 +6,8 @@ import { claimEmail, getEmailStatus, releaseEmail, markSent, markFailed } from '
 import { reserveSlot } from '../services/rateLimiter';
 import { sendMail, type Mail } from '../services/mailer';
 import { updateEmailDoc } from '../services/searchService';
+import { notifyRateLimit } from '../services/slackService';
+import { nextHourStart } from '../utils/time';
 import type { Sender } from '../services/senders';
 import type { EmailJob } from './emailQueue';
 
@@ -24,12 +26,19 @@ export const emailWorker = new Worker<EmailJob>(
       return;
     }
 
-    const batchLimit = Math.min(email.hourly_limit, env.MAX_EMAILS_PER_HOUR_PER_SENDER);
-    const slot = await reserveSlot(email.sender_id, email.batch_id, batchLimit, email.delay_ms);
+    const slot = await reserveSlot(email.sender_id, email.batch_id, email.hourly_limit, email.delay_ms);
     if (!slot.allowed) {
       const retryAt = new Date(slot.retryAt);
       await releaseEmail(email.id, retryAt);
       await job.moveToDelayed(slot.retryAt, token);
+      if (slot.reason === 'limit') {
+        notifyRateLimit(
+          email.user_id,
+          { id: email.sender_id, email: email.sender_email },
+          { scope: slot.scope, value: slot.scope === 'sender' ? env.MAX_EMAILS_PER_HOUR_PER_SENDER : email.hourly_limit },
+          nextHourStart(Date.now()),
+        );
+      }
       logger.info(
         { emailId: email.id, reason: slot.reason, scope: slot.reason === 'limit' ? slot.scope : undefined, retryAt },
         'job delayed: rate limit',

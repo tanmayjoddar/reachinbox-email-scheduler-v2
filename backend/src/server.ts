@@ -7,6 +7,8 @@ import { redis } from './redis/connection';
 import { emailQueue } from './queue/emailQueue';
 import { emailRoutes } from './routes/email.routes';
 import { authRoutes } from './routes/auth.routes';
+import { slackRoutes } from './routes/slack.routes';
+import { adminRoutes } from './routes/admin.routes';
 import { ensureIndex, closeEs } from './services/searchService';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
@@ -23,6 +25,8 @@ app.get('/health', async (_req, res) => {
 });
 
 app.use(authRoutes);
+app.use(slackRoutes);
+app.use('/admin/queues', adminRoutes);
 app.use('/api/emails', emailRoutes);
 app.use(errorHandler);
 

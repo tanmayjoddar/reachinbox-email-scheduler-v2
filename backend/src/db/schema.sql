@@ -49,3 +49,11 @@ CREATE TABLE IF NOT EXISTS emails (
 
 CREATE INDEX IF NOT EXISTS emails_user_status_scheduled_idx ON emails (user_id, status, scheduled_at);
 CREATE INDEX IF NOT EXISTS emails_status_scheduled_idx ON emails (status, scheduled_at);
+
+CREATE TABLE IF NOT EXISTS slack_connections (
+  user_id uuid PRIMARY KEY REFERENCES users(id),
+  team_name text NOT NULL,
+  channel text NOT NULL,
+  webhook_url text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);

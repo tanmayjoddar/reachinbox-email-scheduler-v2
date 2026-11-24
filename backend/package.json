@@ -11,9 +11,12 @@
     "migrate": "tsx --env-file=.env src/db/migrate.ts",
     "seed:senders": "tsx --env-file=.env src/scripts/seedSenders.ts",
     "make-token": "tsx --env-file=.env src/scripts/makeToken.ts",
-    "reindex": "tsx --env-file=.env src/scripts/reindex.ts"
+    "reindex": "tsx --env-file=.env src/scripts/reindex.ts",
+    "load-test": "tsx --env-file=.env src/scripts/loadTest.ts"
   },
   "dependencies": {
+    "@bull-board/api": "^9.14.0",
+    "@bull-board/express": "^9.14.0",
     "@elastic/elasticsearch": "^8.19.2",
     "bullmq": "^5.34.2",
     "cookie-parser": "^1.4.7",

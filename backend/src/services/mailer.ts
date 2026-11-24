@@ -11,6 +11,10 @@ function transportFor(sender: Sender) {
       port: sender.smtp_port,
       secure: sender.smtp_port === 465,
       auth: { user: sender.smtp_user, pass: sender.smtp_pass },
+      // A send must fail well before the 60s stale-claim window or two workers could send the same email.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
     transports.set(sender.id, transport);
   }
