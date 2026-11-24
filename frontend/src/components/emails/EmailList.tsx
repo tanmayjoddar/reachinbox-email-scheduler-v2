@@ -44,19 +44,22 @@ export function EmailList({ tab }: EmailListProps) {
   const isError = !isSearching && listQuery.isError;
 
   return (
-    <div className="space-y-4">
-      {/* Search Header */}
-      <div className="pb-2">
-        <SearchBox value={search} onChange={setSearch} placeholder="Search" />
-      </div>
+    <div className="space-y-6">
+      {/* 1180 fill into 58 hug Search bar with filter & refresh beside it */}
+      <SearchBox
+        value={search}
+        onChange={setSearch}
+        placeholder="Search"
+        onRefresh={() => listQuery.refetch()}
+      />
 
       {searchUnavailable && (
-        <div className="px-3 py-2 text-xs text-status-scheduled-text bg-status-scheduled-bg rounded-lg">
+        <div className="px-4 py-2 text-xs text-status-scheduled-text bg-status-scheduled-bg rounded-lg">
           Search is temporarily unavailable. Showing standard list.
         </div>
       )}
 
-      {/* Content Area */}
+      {/* Email Inbox Rows */}
       {isLoading ? (
         <div className="flex justify-center items-center py-20">
           <Spinner />
@@ -75,7 +78,7 @@ export function EmailList({ tab }: EmailListProps) {
           description={emptyText[tab].description}
         />
       ) : (
-        <div className="divide-y divide-border/60">
+        <div className="divide-y divide-border/80 border-t border-border/80 mt-2">
           {items.map((email) => (
             <EmailRow key={email.id} email={email} tab={tab} />
           ))}
