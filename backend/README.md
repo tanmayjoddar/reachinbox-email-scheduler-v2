@@ -53,9 +53,9 @@ Seeding creates Ethereal SMTP test accounts and prints each web inbox URL. Messa
 - `POST /api/emails/schedule` validates recipients, round-robins senders, and inserts the batch plus all email rows in one transaction. Delayed BullMQ jobs are added after COMMIT; Elasticsearch docs follow without blocking the response.
 - The worker claims a row with one guarded `UPDATE` (`scheduled` or `processing` stale for 60s), reserves a slot, sends via Nodemailer, stamps `sent_at`, and updates the ES doc. Job ids equal email ids, so a BullMQ retry cannot claim the same row twice.
 - Postgres rows are the source of truth. On boot the worker re-enqueues due `scheduled` rows; a crashed worker's `processing` rows become claimable after 60s. At-least-once remains possible only if the process dies after SMTP accepts a message but before the DB update.
-- `src/services/rateLimiter.ts` is one Lua script: a per-sender gate for `MIN_DELAY_MS`, a per-sender hourly counter, a per-batch hourly counter, and overflow counters. All windows are UTC clock hours.
-- The batch limit is per batch and shared by all senders (key `rlb:<batchId>:<hour>`), not per batch+sender. Overflow jobs get one final `scheduled_at` in a future hour, spaced in arrival order; they can bounce again but are never dropped.
-- The requested `hourlyLimit` is honored exactly; it is a per-batch cap shared by all senders, never clamped by `MAX_EMAILS_PER_HOUR_PER_SENDER`. With S senders the sender cap is S × 200/hour, and the smaller of that and the batch limit wins.
+- `src/services/rateLimiter.ts` is one Lua script: a per-sender gate for `MIN_DELAY_MS`, a per-sender hourly counter (`rl:<senderId>:<hour>`), a per-user/tenant hourly counter (`rlu:<userId>:<hour>`, hydrated from PostgreSQL on cache miss), and overflow counters. All windows are UTC clock hours.
+- The hourly limit is shared across all active campaigns for that user/tenant (`rlu:<userId>:<hour>`). Overflow jobs get one final `scheduled_at` in a future hour, spaced in arrival order; they can bounce again but are never dropped.
+- The requested `hourlyLimit` is honored directly against the user's hourly counter; `MAX_EMAILS_PER_HOUR_PER_SENDER` acts as the per-sender SMTP ceiling. With S senders the sender cap is S × 200/hour, and the smaller of that and the user's requested hourly limit wins.
 - Concurrency is per worker process (`WORKER_CONCURRENCY=5`); running more worker processes multiplies it. Search always filters by the authenticated `userId`.
 
 ## Behavior under load
@@ -85,7 +85,7 @@ Measured on this machine with the local Redis, Neon Postgres, ES 8 container, 3 
 - Bull Board behind HTTP basic auth at `/admin/queues`: done.
 - Load test script (`npm run load-test [count] [hourlyLimit] [delayMs]`): done.
 - README: done.
-- Frontend login, dashboard, schedule form, search UI and Slack connect button: pending (no frontend in this repo).
+- Frontend login, dashboard, WYSIWYG compose, detail view, star toggle, search UI and Slack connect button: done (in `../frontend`).
 
 ## API reference
 
@@ -95,6 +95,9 @@ Measured on this machine with the local Redis, Neon Postgres, ES 8 container, 3 
 | POST | `/api/emails/schedule` | cookie | `{ batchId, total, firstSendAt, lastSendAt }`. |
 | GET | `/api/emails?status=&page=&limit=` | cookie | Paginated scheduled/sent rows. |
 | GET | `/api/emails/search?q=&status=` | cookie | Up to 20 ES hits without body. |
+| GET | `/api/emails/:id` | cookie | Single email with full body and attachments. |
+| PATCH | `/api/emails/:id/star` | cookie | Toggles `is_starred` in PostgreSQL. |
+| DELETE | `/api/emails/:id` | cookie | Deletes email row. |
 | GET | `/auth/google` | none | 302 to Google with signed `state`. |
 | GET | `/auth/google/callback` | state | Sets `token`, redirects to dashboard. |
 | GET | `/api/me` | cookie | Current user. |

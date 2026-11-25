@@ -1,267 +1,235 @@
 # ReachInbox — Full-Stack Email Job Scheduler
 
-A production-grade, persistent email job scheduler built for the **ReachInbox / Outbox Labs** hiring assignment. The system schedules email campaigns at scale, manages per-sender concurrency and rate limits using atomic Redis Lua scripts and BullMQ, delivers messages over Ethereal SMTP, survives crashes and restarts without losing jobs, and exposes an inbox-style dashboard matching the Figma design.
+A production-grade, persistent email job scheduler and inbox dashboard built with TypeScript, Express 5, BullMQ, Redis, PostgreSQL, Elasticsearch 8, and React 19.
 
 ---
 
 ## Table of Contents
 - [Tech Stack](#tech-stack)
-- [Quick Start](#quick-start)
-- [Environment Variables](#environment-variables)
-- [Architecture & Design](#architecture--design)
-  - [1. Scheduling Pipeline (No Cron)](#1-scheduling-pipeline-no-cron)
-  - [2. Persistence & Crash Recovery](#2-persistence--crash-recovery)
-  - [3. Throughput, Rate Limiting & Concurrency](#3-throughput-rate-limiting--concurrency)
-  - [4. Elasticsearch Indexing & Search](#4-elasticsearch-indexing--search)
-  - [5. Slack Rate-Limit Notifications](#5-slack-rate-limit-notifications)
-  - [6. Bull Board Queue Dashboard](#6-bull-board-queue-dashboard)
-- [Frontend Overview & Figma Alignment](#frontend-overview--figma-alignment)
-- [Feature Checklist](#feature-checklist)
-- [Assumptions & Deviations](#assumptions--deviations)
+- [Quick Start (4 Terminals)](#quick-start-4-terminals)
+- [Ethereal Email & Environment Variables](#ethereal-email--environment-variables)
+- [Architecture & Engineering Overview](#architecture--engineering-overview)
+  - [1. End-to-End Scheduling & Delivery Flow](#1-end-to-end-scheduling--delivery-flow)
+  - [2. Throughput, Rate Limiting & Concurrency](#2-throughput-rate-limiting--concurrency)
+  - [3. Persistence, Idempotency & Crash Recovery](#3-persistence-idempotency--crash-recovery)
+  - [4. Behavior Under Load (1,000+ Emails)](#4-behavior-under-load-1000-emails)
+  - [5. Elasticsearch Indexing & Live Search](#5-elasticsearch-indexing--live-search)
+  - [6. Slack OAuth & Rate-Limit Alerts](#6-slack-oauth--rate-limit-alerts)
+  - [7. Bull Board Queue Dashboard](#7-bull-board-queue-dashboard)
+- [Features Implemented (Backend & Frontend)](#features-implemented-backend--frontend)
+- [Engineering Trade-offs & Assumptions](#engineering-trade-offs--assumptions)
 
 ---
 
 ## Tech Stack
 
-### Backend
-- **Runtime:** Node.js (v20+) with TypeScript and `tsx`
+### Backend (`backend/`)
+- **Runtime:** Node.js (v20+) with TypeScript (`tsc`, `tsx`)
 - **Framework:** Express 5
-- **Queue Engine:** BullMQ backed by Redis (Strictly no cron jobs)
-- **Database:** PostgreSQL (raw SQL queries with connection pooling, transactional batches)
-- **Search Engine:** Elasticsearch 8 (user-isolated multi-match indexing)
-- **Email Delivery:** Nodemailer over Ethereal SMTP (simulated multi-sender test accounts)
-- **Monitoring:** Bull Board at `/admin/queues` behind HTTP basic auth
+- **Queue Engine:** BullMQ backed by Redis (Strictly zero cron jobs)
+- **Database:** PostgreSQL (`pg` pool, transactional batch inserts, guarded row locking)
+- **Search Engine:** Elasticsearch 8 (`@elastic/elasticsearch`, user-isolated multi-match search)
+- **Email Delivery:** Nodemailer over Ethereal SMTP (multi-sender round-robin pool)
+- **Monitoring:** `@bull-board/express` mounted at `/admin/queues` behind HTTP basic auth
 
-### Frontend
+### Frontend (`frontend/`)
 - **Framework:** React 19 + TypeScript (strict)
-- **Build Tool:** Vite + `@tailwindcss/vite` (Tailwind CSS v4)
+- **Build & Styling:** Vite + Tailwind CSS v4 (`@tailwindcss/vite`)
 - **Routing:** React Router v7
-- **Data Fetching:** `@tanstack/react-query` (5s background polling, `keepPreviousData` smooth updates)
-- **Toasts:** Sonner
-- **Design Target:** Pixel-aligned with Figma node `59-4050`
+- **State & Data:** `@tanstack/react-query` (5s background polling with `keepPreviousData`)
+- **Notifications:** Sonner toast system
 
 ---
 
-## Quick Start
+## Quick Start (4 Terminals)
 
-### 1. Start Infrastructure (Docker)
-Ensure Docker Desktop is running:
+### Terminal 1 — Start Infrastructure (Docker)
+Starts PostgreSQL (`55432`), Redis (`6379`), and Elasticsearch (`9200`):
 ```sh
 cd backend
 docker compose up -d
 ```
-*Spins up PostgreSQL (`55432`), Redis (`6379`), and Elasticsearch (`9200`).*
 
-### 2. Setup & Run Backend
+### Terminal 2 — Backend Setup & Express API Server
 ```sh
 cd backend
 npm install
+cp .env.example .env       # Configure your Google/Slack/DB credentials
+npm run migrate            # Run PostgreSQL schema migrations
+npm run seed:senders -- 3 --force   # Create 3 Ethereal SMTP sender accounts
+npm run dev:api            # Starts Express API on http://localhost:3000
+```
 
-# Run database migrations
-npm run migrate
-
-# Seed 3 Ethereal SMTP sender accounts
-npm run seed:senders -- 3 --force
-
-# Start API server (port 3000)
-npm run dev:api
-
-# In a separate terminal, start Queue Worker
+### Terminal 3 — BullMQ Queue Worker
+Run the worker in its own terminal so it can be stopped and restarted independently:
+```sh
+cd backend
 npm run dev:worker
 ```
 
-### 3. Setup & Run Frontend
+### Terminal 4 — Frontend Dashboard
 ```sh
 cd frontend
 npm install
-
-# Starts Vite dev server with proxy to backend
-npm run dev
-
-# Run TypeScript check and production build
-npm run build
+npm run dev                # Starts Vite dev server on http://localhost:5241
 ```
-Frontend URL: **`http://localhost:5241/`** (or `http://localhost:5173/` depending on host port availability).
+
+> **Note:** On Windows hosts with Hyper-V/WSL2 port exclusions around `5173`, `vite.config.ts` binds to **`http://localhost:5241`**.
 
 ---
 
-## Environment Variables
+## Ethereal Email & Environment Variables
 
-### Backend (`backend/.env`)
-Copy `backend/.env.example` to `backend/.env` and update credentials:
+### Ethereal SMTP Setup
+Running `npm run seed:senders -- 3 --force` automatically generates 3 Ethereal Email test accounts via `nodemailer.createTestAccount()` and stores their SMTP credentials in PostgreSQL (`senders` table). Each delivered message logs its Ethereal preview URL and can be inspected in the Ethereal web inbox.
+
+### Environment Variables (`backend/.env`)
 
 | Variable | Default / Example | Purpose |
 | :--- | :--- | :--- |
-| `PORT` | `3000` | Express API port. |
-| `NODE_ENV` | `development` | Set `production` for secure cookie enforcement. |
-| `DATABASE_URL` | `postgresql://...` | PostgreSQL connection string. |
-| `REDIS_URL` | `redis://localhost:6379` | Redis instance for BullMQ and rate limiter. |
-| `JWT_SECRET` | `local-dev-secret-change-me` | Secret for user sessions and OAuth state tokens. |
-| `WORKER_CONCURRENCY` | `5` | Parallel jobs per worker process. |
-| `MIN_DELAY_MS` | `2000` | Minimum spacing per sender (default: 2s). |
-| `MAX_EMAILS_PER_HOUR_PER_SENDER` | `200` | Provider hourly quota per sender. |
-| `GOOGLE_CLIENT_ID` | `...apps.googleusercontent.com` | Google Cloud OAuth Client ID. |
-| `GOOGLE_CLIENT_SECRET` | `GOCSPX-...` | Google Cloud OAuth Client Secret. |
-| `BASE_URL` | `http://localhost:3000` | Base backend URL for Google OAuth callback. |
-| `FRONTEND_URL` | `http://localhost:5241` | Allowed origin for cookies and post-auth redirect. |
-| `ELASTICSEARCH_URL` | `http://localhost:9200` | Elasticsearch node URL. |
-| `SLACK_CLIENT_ID` | `dev-slack-client-id` | Slack app client ID. |
-| `SLACK_CLIENT_SECRET` | `dev-slack-client-secret` | Slack app client secret. |
-| `SLACK_REDIRECT_URL` | `https://<tunnel>/slack/callback` | Public HTTPS tunnel for Slack OAuth callback. |
-| `ADMIN_USER` | `admin` | HTTP basic auth username for Bull Board. |
-| `ADMIN_PASS` | `admin` | HTTP basic auth password for Bull Board. |
-
-### Ethereal SMTP Setup
-Running `npm run seed:senders -- 3 --force` automatically registers 3 free test accounts on Ethereal Email and saves their credentials into the `senders` table. Messages never leave the test server; each sender prints a web inbox URL where you can view delivered emails:
-```
-sekmo7g265cjyfci@ethereal.email -> https://ethereal.email/messages
-o4peosqstbuhak7r@ethereal.email -> https://ethereal.email/messages
-opyjm2vklid5zcxi@ethereal.email -> https://ethereal.email/messages
-```
+| `PORT` | `3000` | Express API port |
+| `NODE_ENV` | `development` | Enables `secure` cookie flag in `production` |
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:55432/outbox` | PostgreSQL connection string |
+| `REDIS_URL` | `redis://localhost:6379` | Redis instance for BullMQ, rate limiter & dedupe |
+| `JWT_SECRET` | `local-dev-secret-change-me` | Signs auth session cookies and OAuth `state` tokens |
+| `WORKER_CONCURRENCY` | `5` | Parallel jobs processed per worker instance |
+| `MIN_DELAY_MS` | `2000` | **Minimum 2 seconds** delay between sends per sender |
+| `MAX_EMAILS_PER_HOUR_PER_SENDER` | `200` | Configurable per-sender SMTP hourly ceiling |
+| `GOOGLE_CLIENT_ID` | `...apps.googleusercontent.com` | Google Cloud OAuth Client ID |
+| `GOOGLE_CLIENT_SECRET` | `GOCSPX-...` | Google Cloud OAuth Client Secret |
+| `BASE_URL` | `http://localhost:3000` | Backend base URL for Google OAuth callback |
+| `FRONTEND_URL` | `http://localhost:5241` | Allowed CORS origin & post-auth redirect target |
+| `ELASTICSEARCH_URL` | `http://localhost:9200` | Elasticsearch 8 node URL |
+| `SLACK_CLIENT_ID` | `...` | Slack App Client ID |
+| `SLACK_CLIENT_SECRET` | `...` | Slack App Client Secret |
+| `SLACK_REDIRECT_URL` | `https://<tunnel>/slack/callback` | Public HTTPS callback URL for Slack OAuth |
+| `ADMIN_USER` | `admin` | HTTP Basic Auth username for `/admin/queues` |
+| `ADMIN_PASS` | `admin` | HTTP Basic Auth password for `/admin/queues` |
 
 ---
 
-## Architecture & Design
+## Architecture & Engineering Overview
 
-### 1. Scheduling Pipeline (No Cron)
-* **Single Transaction Insertion:** When scheduling via `POST /api/emails/schedule`, the batch record and all recipient rows are inserted into PostgreSQL within a single database transaction (`BEGIN ... COMMIT`).
-* **Sender Round-Robin:** Recipients are assigned round-robin across active senders so that aggregate throughput scales with the number of senders while individual senders stay spaced by `effectiveDelay`.
-* **BullMQ Delayed Jobs:** Once committed, jobs are pushed to BullMQ with `{ delay: scheduledAt - now }`. Job IDs match PostgreSQL email row UUIDs, ensuring 1:1 mapping and preventing duplicate job dispatch.
+### 1. End-to-End Scheduling & Delivery Flow
 
-### 2. Persistence & Crash Recovery
-* **PostgreSQL as Single Source of Truth:** BullMQ jobs are transient handles. The persistent state lives in PostgreSQL.
-* **Boot Recovery:** When the worker process boots up, it queries PostgreSQL for any pending `scheduled` emails whose send time has arrived and re-enqueues them into BullMQ.
-* **Guarded Idempotency Lock:** The worker claims an email with a single guarded SQL update:
+```mermaid
+flowchart LR
+    UI["React Dashboard / Compose"] -->|POST /api/emails/schedule| API["Express 5 API"]
+    API -->|Single Transaction| PG[("PostgreSQL\nbatches & emails")]
+    API -->|Delayed Jobs| Redis[("Redis / BullMQ\n(delay = scheduledAt - now)")]
+    API -.->|Async Bulk Index| ES[("Elasticsearch 8\n(emails index)")]
+
+    Redis -->|Job Ready| Worker["BullMQ Worker\n(Concurrency = 5)"]
+    Worker -->|1. Guarded Lock| PG
+    Worker -->|2. Atomic Lua Check| RateLimiter["Redis Rate Limiter\n(Gate + Sender + User Cap)"]
+    RateLimiter -->|Allowed| SMTP["Ethereal SMTP\n(Round-Robin Senders)"]
+    RateLimiter -->|Limit Hit| Defer["Move Job to Next UTC Hour\n+ Trigger Slack Alert"]
+    SMTP -->|Sent| PG
+    SMTP -.->|Update Status| ES
+```
+
+* **Transactional Atomicity:** `POST /api/emails/schedule` inserts the `batches` row and all `emails` rows inside a single PostgreSQL `BEGIN ... COMMIT` transaction before dispatching jobs to BullMQ.
+* **Sender Round-Robin:** Recipients are distributed round-robin across active Ethereal senders in the `senders` table so aggregate throughput scales linearly with sender count while each sender remains throttled.
+* **No Cron Jobs:** All scheduling relies strictly on BullMQ delayed jobs (`delay: Math.max(0, scheduledAt - now)`).
+
+---
+
+### 2. Throughput, Rate Limiting & Concurrency
+
+```mermaid
+flowchart TD
+    Job["Worker Claims Email"] --> Hydrate{"Redis key\nrlu:userId:window\nexists?"}
+    Hydrate -->|No| DBCount["Hydrate from PostgreSQL\nCOUNT(sent in current UTC hour)"]
+    DBCount --> Lua
+    Hydrate -->|Yes| Lua["Execute Atomic Lua Script"]
+
+    Lua --> SenderCheck{"Sender Count >=\nMAX_EMAILS_PER_HOUR_PER_SENDER?"}
+    SenderCheck -->|Yes| Overflow["Increment overflow counter\nCompute next UTC hour slot"]
+
+    SenderCheck -->|No| UserCheck{"User Count >=\nhourlyLimit?"}
+    UserCheck -->|Yes| Overflow
+
+    UserCheck -->|No| GateCheck{"Min Delay Gate\ngate:senderId active?"}
+    GateCheck -->|Yes| DelayRetry["Delay by remaining PTTL + jitter"]
+    GateCheck -->|No| Allow["Increment Counters\nSet Gate PX = MIN_DELAY_MS\nAllow Send"]
+
+    Overflow --> Reschedule["DB: releaseEmail(nextWindow)\nBullMQ: moveToDelayed(nextWindow)\nNotify Slack (1h Redis dedupe)"]
+```
+
+* **Worker Concurrency:** Configured via `WORKER_CONCURRENCY=5` (`backend/src/queue/emailWorker.ts`). Multiple worker processes can run in parallel safely.
+* **Delay Between Sends:** Enforces a **minimum 2 seconds (`MIN_DELAY_MS=2000`)** gap between individual sends per sender using a Redis TTL gate (`gate:<senderId>`).
+* **Atomic Redis Lua Limiter:** A single Lua script (`backend/src/services/rateLimiter.ts`) atomically checks both the per-sender cap (`rl:<senderId>:<window>`) and the user/tenant hourly limit (`rlu:<userId>:<window>`).
+* **Zero Dropped Jobs:** When an hourly limit is reached, jobs are never dropped or failed—they are placed directly into deterministic slots in the next UTC hour window (`nextHourStart + offset`), preserving arrival order.
+
+---
+
+### 3. Persistence, Idempotency & Crash Recovery
+* **PostgreSQL as Source of Truth:** BullMQ jobs carry only `emailId`; all state lives in PostgreSQL.
+* **Guarded Idempotency Lock (`claimEmail`):** Workers claim rows via a single atomic SQL update:
   ```sql
-  UPDATE emails SET status = 'processing', processing_started_at = now()
-  WHERE id = $1 AND (status = 'scheduled' OR (status = 'processing' AND processing_started_at < now() - interval '60 seconds'))
+  UPDATE emails e SET status = 'processing', processing_started_at = now()
+  FROM senders s, batches b, users u
+  WHERE e.id = $1 AND e.sender_id = s.id AND e.batch_id = b.id AND e.user_id = u.id
+    AND (e.status = 'scheduled' OR (e.status = 'processing' AND e.processing_started_at < now() - interval '60 seconds'))
   ```
-  If a worker crashes mid-send, the row becomes claimable again after 60 seconds. An email can never be processed twice concurrently.
-
-### 3. Throughput, Rate Limiting & Concurrency
-* **Worker Concurrency:** BullMQ worker concurrency is configurable via `WORKER_CONCURRENCY` (default: 5). Running multiple worker instances scales throughput horizontally.
-* **Minimum Delay Between Sends:** Every sender enforces a minimum spacing (`MIN_DELAY_MS=2000`).
-* **Atomic Redis Lua Limiter:** An atomic Lua script handles gate checks and hourly limits in a single round-trip:
-  1. Checks if the sender's minimum delay gate (`gate:<senderId>`) is active.
-  2. Increments and checks the sender's hourly counter (`rls:<senderId>:<hour>`).
-  3. Increments and checks the batch's hourly counter (`rlb:<batchId>:<hour>`).
-* **Safe Overflow (Zero Dropped Emails):** When an hourly limit is reached, jobs are **never** dropped or marked failed. The job's `scheduled_at` is moved into the next UTC hour window (`next_hour + offset`), preserving arrival order, and re-delayed in BullMQ.
-
-### 4. Elasticsearch Indexing & Search
-* Emails are indexed into Elasticsearch (`emails` index) with fields: `recipient`, `subject`, `body`, `status`, `scheduledAt`, `sentAt`, `senderEmail`, `userId`.
-* The frontend search bar debounces queries (300ms) and executes multi-match queries isolated by the authenticated `userId`.
-* On Elasticsearch unavailability (503), the frontend gracefully falls back to the database list query without crashing.
-
-### 5. Slack Rate-Limit Notifications
-* Users can connect their Slack workspace via OAuth (`/api/slack/connect`).
-* The instant a sender reaches their hourly rate limit, the backend triggers an incoming webhook alert to the user's connected Slack channel:
-  > *"Sender sekmo7g265cjyfci@ethereal.email hit hourly cap (200) for hour 10:00 UTC. 15 remaining emails moved to next hour."*
-* Notifications are deduplicated per sender per hour using Redis keys.
-
-### 6. Bull Board Queue Dashboard
-* Visual monitoring of delayed, active, completed, and failed BullMQ jobs.
-* Accessible at **`/admin/queues`** protected by HTTP basic auth (`ADMIN_USER:ADMIN_PASS`).
-* Direct one-click link available from the user profile dropdown in the frontend.
+* **Restart Recovery:** On boot (`src/worker.ts`), `recoverScheduledEmails()` queries PostgreSQL for pending `scheduled` rows and re-enqueues missing BullMQ jobs using `jobId = email.id`. Completed (`sent`) rows are never re-sent.
 
 ---
 
-## Frontend Overview & Figma Alignment
-
-The frontend in `frontend/` was crafted from scratch to match Figma node **`59-4050`**:
-
-* **Pixel Font `ONB` Logo:** Custom pixelated SVG component matching the retro bitmap typography in the Figma sidebar header.
-* **Sidebar Layout:** Width `236px` matching Figma specs, featuring the user profile card with avatar, pill outline **Compose** button, and **Core** section with `Scheduled` and `Sent` live count badges.
-* **Search Header:** Sized to `1180px fill × 58px hug` with `rounded-full` styling, accompanied by external filter and refresh controls.
-* **Email Inbox Rows:** Clean horizontal rows displaying recipient (`To: ...`), status badges (peach pill for scheduled time, gray pill for sent), bold subject with body preview, and decorative star icon.
-* **Composer (`/compose`):**
-  - Lead upload accepting `.csv` and `.txt` files with parsing, deduplication, valid lead count, and green recipient chips (`[ email ✕ ]`).
-  - Image and document attachment support via the Pin icon with preview cards matching the Figma design.
-  - Interactive "Send Later" popover with date-time picker and presets (*Tomorrow*, *Tomorrow 10:00 AM*, etc.).
-  - Delay in seconds and hourly limit numeric controls.
-  - Rich text toolbar styling with clean reply textarea.
-* **Smooth Auto-Polling:** React Query polls `/api/emails` every 5 seconds with `keepPreviousData` so emails move seamlessly from Scheduled to Sent without list flicker.
+### 4. Behavior Under Load (1,000+ Emails)
+When 1,000+ emails are scheduled for the same timestamp:
+1. All rows are bulk-inserted via `unnest(...)` in one PostgreSQL transaction and enqueued in BullMQ.
+2. Up to the configured hourly limit (e.g., `hourlyLimit` or `S * MAX_EMAILS_PER_HOUR_PER_SENDER`) is dispatched in the current UTC hour, spaced by `MIN_DELAY_MS` per sender.
+3. Remaining emails hit the Redis Lua limiter, receive a deterministic future `retryAt` across subsequent UTC hour windows (`Math.floor((k - 1) / limit) * HOUR`), and are moved once via `job.moveToDelayed()`—preventing busy-loop retries.
+4. You can verify this locally with the built-in load test script:
+   ```sh
+   cd backend
+   npm run load-test -- 1200 20 2000
+   ```
 
 ---
 
-## Feature Checklist
-
-### Backend Requirements
-- [x] Accept email send requests via API (`POST /api/emails/schedule`)
-- [x] PostgreSQL relational schema with idempotent migrations
-- [x] BullMQ + Redis delayed queue scheduling (Strictly no cron jobs)
-- [x] Multi-sender SMTP delivery via Ethereal Email test accounts
-- [x] Boot recovery & crash resilience (PostgreSQL source of truth, atomic state lock)
-- [x] Worker concurrency configured via `WORKER_CONCURRENCY=5`
-- [x] Minimum delay between sends per sender (`MIN_DELAY_MS=2000`)
-- [x] Configurable hourly rate limits (per sender and per batch)
-- [x] Zero dropped emails on rate-limit hits (delayed to next UTC hour window)
-- [x] Slack OAuth connection and rate-limit hit webhook notifications
-- [x] Elasticsearch indexing and multi-match user-isolated search
-- [x] Bull Board live queue dashboard at `/admin/queues`
-- [x] Google OAuth session authentication with `httpOnly` cookies
-
-### Frontend Requirements
-- [x] Real Google OAuth login flow (`/login` -> `/auth/google`)
-- [x] Top header / user profile card with avatar, name, email, and logout
-- [x] Dashboard navigation with Scheduled and Sent tabs showing live counts
-- [x] Primary "Compose New Email" button with full composer view
-- [x] True WYSIWYG rich text editor with real-time Bold, Italic, Underline, Strikethrough, Quotes, Lists, Headings
-- [x] Single Send button with auto-reset (defaults to now, schedules if future time selected)
-- [x] Interactive Email Detail View matching Figma with 100% real body, sender avatar, recipient, code snippet, and real attachments
-- [x] Full-stack Star toggle persistence (persisted in DB column `emails.is_starred`)
-- [x] CSV / TXT lead upload with email regex extraction, deduplication, and chips
-- [x] Start time picker with "Send Later" popover and quick presets
-- [x] Delay between emails (seconds) and hourly limit inputs
-- [x] Filter funnel dropdown (All, Scheduled, Sending)
-- [x] Shared Scheduled and Sent table/list driven by reusable components
-- [x] Real-time 5-second polling via React Query without UI flicker
-- [x] Debounced search querying Elasticsearch with 503 fallback
-- [x] Loading spinners, empty states with illustrations, and error banners
-- [x] Connect Slack integration control and notification handling
-- [x] Strict TypeScript (zero `any`, zero build errors) and clean component architecture
+### 5. Elasticsearch Indexing & Live Search
+* `backend/src/services/searchService.ts` defines explicit mappings (`keyword` for `id`, `userId`, `batchId`, `status`; `text` for `recipient`, `subject`, `body`, `senderEmail`).
+* On schedule, `indexEmails()` bulk-indexes all recipients. On send, `updateEmailDoc()` updates `status` and `sentAt`.
+* `GET /api/emails/search?q=...` runs user-isolated `multi_match` queries. In the dashboard, typing in the search bar displays a live `[Elasticsearch]` match counter banner above the table.
 
 ---
 
-## 5-Minute Demo Video Guide
-
-Record a 5-minute Loom or unlisted YouTube video following this structure:
-
-1. **Minute 0:00 – 0:45: Project Overview & Google Login**
-   * Introduce ReachInbox / Outbox Labs Email Scheduler.
-   * Log in with real Google OAuth -> highlight user avatar, email, and "Connect Slack" button.
-2. **Minute 0:45 – 1:30: Slack OAuth & Dashboard Tour**
-   * Click "Connect Slack" -> Authorize in Slack -> verify green connected badge `#alerts`.
-   * Tour Scheduled and Sent tabs, filter funnel, and live Bull Board at `/admin/queues`.
-3. **Minute 1:30 – 2:45: Compose, Real Formatting & Scheduling**
-   * Upload leads file (show count detected).
-   * Type message: demonstrate live WYSIWYG Bold, Underline, Quotes.
-   * Attach files (show real preview).
-   * Click "Send Later" clock popover -> pick future date -> show reset behavior.
-   * Set Hourly Limit = 100, Delay = 2s, click Send.
-4. **Minute 2:45 – 3:30: Live Delivery, Elasticsearch & Detail View**
-   * Watch Scheduled list update in real time.
-   * Click row to open Email Detail View -> verify 100% real body, attachments, and toggle gold star.
-   * Type in Search bar -> show real-time Elasticsearch multi-match results.
-5. **Minute 3:30 – 4:15: Rate Limiting & Slack Alert**
-   * Show 100 emails sent and remaining emails deferred to next hour window.
-   * Open Slack channel: show live incoming webhook alert with pending count and next window start time.
-6. **Minute 4:15 – 5:00: Crash Resilience / Server Restart**
-   * Stop backend/worker process with `Ctrl+C`.
-   * Restart worker (`npm run dev:worker`).
-   * Show log: *"recovery re-enqueued scheduled emails"*.
-   * Verify future emails send at the exact scheduled time without re-sending completed emails or losing state.
+### 6. Slack OAuth & Rate-Limit Alerts
+* Users connect Slack via OAuth 2.0 (`GET /api/slack/connect` &rarr; `GET /slack/callback` with signed JWT `state`).
+* Webhook credentials (`team_name`, `channel`, `webhook_url`) are stored per user in `slack_connections`.
+* On rate-limit hit, `notifyRateLimit()` posts a live alert using a 1-hour Redis deduplication lock (`slack:notified:<userId>:<senderId>:<hourWindow>`):
+  > ⚠️ **Rate Limit Alert:** Sender `user@gmail.com` hit the batch limit of **10 emails/hour**. ⏳ **96 emails** for this sender are currently pending. 🕒 Next sending window starts at **11:00 PM** (`2026-11-24T23:00:00.000Z`).
+* If Slack is disconnected, rate-limit hits are silently ignored without crashing. Reconnecting enables alerts immediately without a redeploy.
 
 ---
 
-## Submission Details
-
-* **Private Repository Collaborators:** `Mitrajit`, `Yadav036`
-* **ClickUp Submission Form:** [Fill Form Here](https://forms.clickup.com/9005062261/f/8cbwp3n-8876/6NNNJ92DV93PQTAYST)
+### 7. Bull Board Queue Dashboard
+* Real-time queue visibility (`delayed`, `active`, `completed`, `failed`, `waiting`) via `@bull-board/express` at `/admin/queues`, protected by HTTP Basic Auth (`ADMIN_USER` / `ADMIN_PASS`).
 
 ---
 
-## Assumptions & Deviations
+## Features Implemented (Backend & Frontend)
 
-1. **Email / Password Form Fields on Login:** The Figma login frame shows static email/password inputs. These are displayed as visual indicators only, as the backend exclusively implements real Google OAuth login.
-2. **Sender Round-Robin:** The backend assigns senders round-robin across the active Ethereal sender pool to maximize throughput while respecting individual sender delay spacing.
-3. **Dev Port Fallback on Windows:** On Windows hosts with WSL2/Hyper-V enabled, port `5173` is frequently included in dynamic TCP exclusion ranges (`netsh interface ipv4 show excludedportrange`). `vite.config.ts` detects this and automatically falls back to port `5241`.
+### Backend
+* **Scheduler:** Express 5 API (`POST /api/emails/schedule`), PostgreSQL transactional batches, BullMQ delayed jobs (no cron), Ethereal multi-sender SMTP pool.
+* **Persistence & Idempotency:** PostgreSQL state machine, guarded `claimEmail` lock, boot recovery (`recoverScheduledEmails()`), stale lock reclamation after 60s.
+* **Rate Limiting & Concurrency:** Configurable `WORKER_CONCURRENCY`, `MIN_DELAY_MS` per-sender Redis gate, atomic Redis Lua hourly limiter with DB hydration, deterministic next-hour rescheduling.
+* **Search, Monitoring & Alerts:** Elasticsearch 8 indexing + `/api/emails/search`, Bull Board at `/admin/queues`, real Slack OAuth + live webhook alerts, Google OAuth2 session cookies.
+
+### Frontend
+* **Authentication:** Real Google OAuth login (`/login` &rarr; `/auth/google`), top/sidebar user profile (name, email, avatar), and logout.
+* **Dashboard:** Scheduled & Sent tabs with live counts, status pills, filter funnel (`All`, `Scheduled`, `Sending`), pagination, loading spinners, empty states, and 5s React Query polling.
+* **Compose (`/compose`):** WYSIWYG `contentEditable` rich-text editor (Bold, Italic, Underline, Strikethrough, Quote, Lists, Headings, Undo/Redo), `.csv`/`.txt` lead upload with count & chips, real file attachments, delay & hourly limit controls, and unified **Send** / **Send Later** clock popover with auto-reset.
+* **Detail View & Search:** Click any email row to view full formatted body, real attachments, Google sender header, full-stack star toggle (`PATCH /api/emails/:id/star`), and live Elasticsearch search bar.
+
+---
+
+## Engineering Trade-offs & Assumptions
+
+1. **UTC Clock Hour Windows:** Rate-limit windows align to UTC clock hours (`Math.floor(nowMs / 3_600_000)`) rather than sliding 60-minute windows for deterministic O(1) Redis keys and predictable next-window scheduling.
+2. **Pre-SMTP Slot Reservation:** Rate-limit slots are reserved before SMTP transmission; if an SMTP attempt fails, that slot still counts toward capacity, preventing retry storms from exceeding provider limits.
+3. **At-Least-Once Crash Edge Case:** A crash occurring in the narrow window after SMTP accepts a message but before PostgreSQL marks `status = 'sent'` will make the row reclaimable after 60s.
+4. **Sender Round-Robin:** Senders are assigned round-robin across the Ethereal pool to scale aggregate throughput while respecting each sender's `MIN_DELAY_MS` gate.
+5. **Dev Port Fallback on Windows:** `vite.config.ts` binds to `5241` to avoid Windows Hyper-V/WSL2 dynamic port exclusion ranges around `5173`.
