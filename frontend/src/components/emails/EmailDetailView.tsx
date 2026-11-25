@@ -88,19 +88,23 @@ export function EmailDetailView({ email, onBack, onToggleStar, onDelete }: Email
         </div>
       </div>
 
-      {/* Email Sender info row */}
+      {/* Email Sender info row - displays the logged in user's Google name, email, and avatar */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="h-10 w-10 rounded-full bg-accent text-white flex items-center justify-center font-bold text-sm shrink-0">
-            {senderInitial}
-          </div>
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt={user.name ?? 'Sender'} className="h-10 w-10 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="h-10 w-10 rounded-full bg-accent text-white flex items-center justify-center font-bold text-sm shrink-0">
+              {(user?.name?.[0] ?? user?.email?.[0] ?? senderInitial).toUpperCase()}
+            </div>
+          )}
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-xs text-primary">
-                {email.senderEmail.split('@')[0]}
+                {user?.name || user?.email?.split('@')[0] || email.senderEmail.split('@')[0]}
               </span>
               <span className="text-xs text-muted">
-                &lt;{email.senderEmail}&gt;
+                &lt;{user?.email || email.senderEmail}&gt;
               </span>
             </div>
             <div className="text-xs text-muted flex items-center gap-1 mt-0.5">

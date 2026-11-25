@@ -73,7 +73,6 @@ export async function notifyRateLimit(
   const key = `slack:notified:${userId}:${sender.id}:${hourWindow(Date.now())}`;
   let claimed = false;
   try {
-    // Looked up per call so a connection added after a burst starts working without a redeploy.
     const connection = await getSlackConnection(userId);
     if (!connection) return;
     if (!(await redis.set(key, '1', 'EX', 3600, 'NX'))) return;
@@ -84,8 +83,13 @@ export async function notifyRateLimit(
        WHERE user_id = $1 AND sender_id = $2 AND status IN ('scheduled', 'processing')`,
       [userId, sender.id],
     );
-    const label = limit.scope === 'sender' ? 'sender cap' : 'batch limit';
-    const text = `Sender ${sender.email} hit the ${label} of ${limit.value} emails/hour. ${rows[0].pending} emails for this sender are still pending. Next window starts at ${new Date(nextWindowStart).toISOString()}.`;
+
+    const pendingCount = rows[0]?.pending ?? 0;
+    const nextDate = new Date(nextWindowStart);
+    const nextTimeFormatted = nextDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    const nextIso = nextDate.toISOString();
+
+    const text = `⚠️ *Rate Limit Alert:* Sender \`${sender.email}\` hit the batch limit of *${limit.value} emails/hour*. ⏳ *${pendingCount} emails* for this sender are currently pending. 🕒 Next sending window starts at *${nextTimeFormatted}* (\`${nextIso}\`).`;
 
     const res = await fetch(connection.webhook_url, {
       method: 'POST',

@@ -12,6 +12,8 @@ export interface ClaimedEmail {
   smtp_port: number;
   smtp_user: string;
   smtp_pass: string;
+  user_email: string;
+  user_name: string;
   subject: string;
   body: string;
   hourly_limit: number;
@@ -22,11 +24,12 @@ export interface ClaimedEmail {
 export async function claimEmail(id: string): Promise<ClaimedEmail | null> {
   const { rows } = await pool.query(
     `UPDATE emails e SET status = 'processing', processing_started_at = now()
-     FROM senders s, batches b
-     WHERE e.id = $1 AND e.sender_id = s.id AND e.batch_id = b.id
+     FROM senders s, batches b, users u
+     WHERE e.id = $1 AND e.sender_id = s.id AND e.batch_id = b.id AND e.user_id = u.id
        AND (e.status = 'scheduled' OR (e.status = 'processing' AND e.processing_started_at < now() - interval '60 seconds'))
      RETURNING e.id, e.batch_id, e.user_id, e.sender_id, e.recipient, e.scheduled_at,
        s.email AS sender_email, s.smtp_host, s.smtp_port, s.smtp_user, s.smtp_pass,
+       u.email AS user_email, u.name AS user_name,
        b.subject, b.body, b.hourly_limit, b.delay_ms`,
     [id],
   );

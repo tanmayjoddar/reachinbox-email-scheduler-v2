@@ -34,7 +34,7 @@ export const emailWorker = new Worker<EmailJob>(
       if (slot.reason === 'limit') {
         notifyRateLimit(
           email.user_id,
-          { id: email.sender_id, email: email.sender_email },
+          { id: email.sender_id, email: email.user_email || email.sender_email },
           { scope: slot.scope, value: slot.scope === 'sender' ? env.MAX_EMAILS_PER_HOUR_PER_SENDER : email.hourly_limit },
           nextHourStart(Date.now()),
         );
