@@ -4,5 +4,6 @@ logs/
 *.log
 .env
 .env.*
+.env.hosted
 .neon
 docs/
