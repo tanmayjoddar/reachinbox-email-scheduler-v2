@@ -53,6 +53,12 @@ body {
   outline-offset: 2px;
 }
 
+input:focus-visible,
+textarea:focus-visible,
+[type="search"]:focus-visible {
+  outline: none;
+}
+
 /* Rich Text WYSIWYG & Detail View Content */
 .rich-text-content,
 .rich-editor {

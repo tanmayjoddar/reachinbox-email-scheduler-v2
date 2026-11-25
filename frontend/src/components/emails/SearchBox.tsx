@@ -14,6 +14,16 @@ interface SearchBoxProps {
 export function SearchBox({ value, onChange, placeholder = 'Search', onRefresh, filter = 'all', onFilterChange }: SearchBoxProps) {
   const [local, setLocal] = useState(value);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefresh?.();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -51,7 +61,7 @@ export function SearchBox({ value, onChange, placeholder = 'Search', onRefresh, 
           value={local}
           onChange={(e) => handleChange(e.target.value)}
           placeholder={placeholder}
-          className="flex-1 bg-transparent text-sm text-primary placeholder:text-muted focus:outline-none"
+          className="flex-1 bg-transparent text-sm text-primary placeholder:text-muted border-none outline-none focus:outline-none focus-visible:outline-none ring-0 focus:ring-0 shadow-none"
         />
       </div>
 
@@ -88,11 +98,12 @@ export function SearchBox({ value, onChange, placeholder = 'Search', onRefresh, 
 
         <button
           type="button"
-          onClick={onRefresh}
+          onClick={handleRefreshClick}
           className="p-1.5 hover:text-primary transition-colors cursor-pointer"
           aria-label="Refresh"
+          title="Refresh emails"
         >
-          <RefreshIcon />
+          <RefreshIcon className={isRefreshing ? 'animate-spin' : ''} />
         </button>
       </div>
     </div>
@@ -115,9 +126,9 @@ function FilterIcon() {
   );
 }
 
-function RefreshIcon() {
+function RefreshIcon({ className = '' }: { className?: string }) {
   return (
-    <svg className="h-4 w-4 text-muted hover:text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+    <svg className={`h-4 w-4 text-muted hover:text-primary ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
     </svg>
   );

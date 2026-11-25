@@ -64,6 +64,7 @@ export function EmailList({ tab }: EmailListProps) {
     mutationFn: (id: string) => toggleStarEmail(id),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
+      queryClient.invalidateQueries({ queryKey: ['email-search'] });
       if (selectedEmail && selectedEmail.id === res.id) {
         setSelectedEmail((prev) => prev ? { ...prev, isStarred: res.isStarred } : null);
       }
@@ -76,6 +77,7 @@ export function EmailList({ tab }: EmailListProps) {
     mutationFn: (id: string) => deleteEmail(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['emails'] });
+      queryClient.invalidateQueries({ queryKey: ['email-search'] });
       setSelectedEmail(null);
       toast.success('Email deleted');
     },
@@ -106,7 +108,15 @@ export function EmailList({ tab }: EmailListProps) {
         value={search}
         onChange={setSearch}
         placeholder="Search"
-        onRefresh={() => listQuery.refetch()}
+        onRefresh={async () => {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ['emails'] }),
+            queryClient.invalidateQueries({ queryKey: ['email-search'] }),
+            listQuery.refetch(),
+            isSearching ? searchQuery.refetch() : Promise.resolve(),
+          ]);
+          toast.success('Emails refreshed');
+        }}
         filter={filter}
         onFilterChange={setFilter}
       />

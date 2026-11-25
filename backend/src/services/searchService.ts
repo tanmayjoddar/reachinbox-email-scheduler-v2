@@ -1,4 +1,5 @@
 import { Client } from '@elastic/elasticsearch';
+import { pool } from '../db/pool';
 import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
@@ -94,18 +95,26 @@ export async function searchEmails({ userId, q, status }: SearchInput) {
     },
   });
 
-  return result.hits.hits.map((hit) => {
-    const doc = hit._source as EmailDoc;
-    return {
-      id: doc.id,
-      recipient: doc.recipient,
-      subject: doc.subject,
-      status: doc.status,
-      scheduledAt: doc.scheduledAt,
-      sentAt: doc.sentAt,
-      senderEmail: doc.senderEmail,
-    };
-  });
+  const hits = result.hits.hits.map((hit) => hit._source as EmailDoc);
+  if (!hits.length) return [];
+
+  const ids = hits.map((h) => h.id);
+  const { rows } = await pool.query(
+    'SELECT id, is_starred FROM emails WHERE id = ANY($1)',
+    [ids],
+  );
+  const starMap = new Map<string, boolean>(rows.map((r) => [r.id, r.is_starred]));
+
+  return hits.map((doc) => ({
+    id: doc.id,
+    recipient: doc.recipient,
+    subject: doc.subject,
+    status: doc.status,
+    scheduledAt: doc.scheduledAt,
+    sentAt: doc.sentAt,
+    senderEmail: doc.senderEmail,
+    isStarred: Boolean(starMap.get(doc.id)),
+  }));
 }
 
 export const closeEs = () => es.close();

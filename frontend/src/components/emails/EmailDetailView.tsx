@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { formatDateTime } from '@/lib/format';
 import { useAuth } from '@/hooks/useAuth';
 import { FormattedBody } from './FormattedBody';
@@ -14,6 +14,10 @@ interface EmailDetailViewProps {
 export function EmailDetailView({ email, onBack, onToggleStar, onDelete }: EmailDetailViewProps) {
   const { data: user } = useAuth();
   const [starred, setStarred] = useState(Boolean(email.isStarred));
+
+  useEffect(() => {
+    setStarred(Boolean(email.isStarred));
+  }, [email.isStarred]);
 
   const handleStarClick = () => {
     setStarred((prev) => !prev);
