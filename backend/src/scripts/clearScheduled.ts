@@ -8,7 +8,11 @@ async function clean() {
   console.log('--- Starting Complete Email & Queue Cleanup ---');
 
   // 1. Database Cleanup (Emails and Batches)
-  const pg = new Client({ connectionString: env.DATABASE_URL });
+  const isRemote = !env.DATABASE_URL.includes('localhost') && !env.DATABASE_URL.includes('127.0.0.1');
+  const pg = new Client({
+    connectionString: env.DATABASE_URL,
+    ssl: isRemote ? { rejectUnauthorized: false } : undefined,
+  });
   await pg.connect();
 
   const delEmails = await pg.query('DELETE FROM emails RETURNING id');

@@ -14,7 +14,8 @@
     "make-token": "tsx --env-file=.env src/scripts/makeToken.ts",
     "reindex": "tsx --env-file=.env src/scripts/reindex.ts",
     "load-test": "tsx --env-file=.env src/scripts/loadTest.ts",
-    "clean": "tsx --env-file=.env src/scripts/clearScheduled.ts"
+    "clean": "tsx --env-file=.env src/scripts/clearScheduled.ts",
+    "clear": "tsx --env-file=.env src/scripts/clearScheduled.ts"
   },
   "dependencies": {
     "@bull-board/api": "^9.14.0",
