@@ -46,9 +46,16 @@ export function ComposeForm() {
       toast.error('Please enter an email subject');
       return false;
     }
-    const textContent = editorRef.current?.innerText?.trim() || '';
-    if (!textContent && !body.trim()) {
-      toast.error('Please type your message in "Type Your Reply..."');
+    const rawText = (editorRef.current?.innerText || editorRef.current?.textContent || '')
+      .replace(/\u200B/g, '')
+      .trim();
+    const plainFromHtml = (editorRef.current?.innerHTML || body || '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+
+    if (!rawText && !plainFromHtml) {
+      toast.error('Please enter an email body before sending');
       return false;
     }
     return true;
@@ -179,7 +186,11 @@ export function ComposeForm() {
     setBody(el.innerHTML);
   };
 
-  const isComplete = subject.trim() && (body.trim() || Boolean(editorRef.current?.innerText?.trim())) && recipients.length > 0;
+  const hasPlainText = Boolean(
+    (editorRef.current?.innerText || '').replace(/\u200B/g, '').trim() ||
+    (body || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim(),
+  );
+  const isComplete = subject.trim().length > 0 && hasPlainText && recipients.length > 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-4">

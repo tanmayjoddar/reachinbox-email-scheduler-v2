@@ -8,8 +8,11 @@ import { searchEmails } from '../services/searchService';
 import { logger } from '../utils/logger';
 
 const scheduleSchema = z.object({
-  subject: z.string().trim().min(1),
-  body: z.string().min(1),
+  subject: z.string().trim().min(1, 'Subject cannot be empty'),
+  body: z.string().refine(
+    (val) => val.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\u200B/g, '').trim().length > 0,
+    { message: 'Email body cannot be empty' },
+  ),
   recipients: z.array(z.string().trim().toLowerCase().email()).min(1).max(5000),
   startTime: z.string().datetime({ offset: true }),
   delayBetweenMs: z.number().int().nonnegative(),

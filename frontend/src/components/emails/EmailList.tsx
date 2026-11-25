@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -39,8 +39,14 @@ export function EmailList({ tab }: EmailListProps) {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterOption>(tab === 'scheduled' ? 'scheduled' : 'all');
+  const [filter, setFilter] = useState<FilterOption>('all');
   const [selectedEmail, setSelectedEmail] = useState<EmailItem | null>(null);
+
+  useEffect(() => {
+    setFilter('all');
+    setPage(1);
+    setSearch('');
+  }, [tab]);
 
   const listQuery = useEmails(tab, page);
   const searchQuery = useEmailSearch(search, tab);
