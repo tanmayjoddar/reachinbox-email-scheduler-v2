@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useEmails, useEmailSearch } from '@/hooks/useEmails';
@@ -146,6 +147,20 @@ export function EmailList({ tab }: EmailListProps) {
           icon={<MailIcon />}
           title={hasActiveFilter ? emptyFilterText.title : emptyText[tab].title}
           description={hasActiveFilter ? emptyFilterText.description : emptyText[tab].description}
+          action={
+            hasActiveFilter ? (
+              <Button variant="secondary" onClick={() => setFilter('all')} className="mt-2 text-xs">
+                Clear filter
+              </Button>
+            ) : (
+              <Link
+                to="/compose"
+                className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+              >
+                Compose New Email
+              </Link>
+            )
+          }
         />
       ) : (
         <div className="divide-y divide-border/80 border-t border-border/80 mt-2">
