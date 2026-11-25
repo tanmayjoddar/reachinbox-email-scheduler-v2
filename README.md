@@ -205,21 +205,63 @@ The frontend in `frontend/` was crafted from scratch to match Figma node **`59-4
 - [x] Top header / user profile card with avatar, name, email, and logout
 - [x] Dashboard navigation with Scheduled and Sent tabs showing live counts
 - [x] Primary "Compose New Email" button with full composer view
+- [x] True WYSIWYG rich text editor with real-time Bold, Italic, Underline, Strikethrough, Quotes, Lists, Headings
+- [x] Single Send button with auto-reset (defaults to now, schedules if future time selected)
+- [x] Interactive Email Detail View matching Figma with 100% real body, sender avatar, recipient, code snippet, and real attachments
+- [x] Full-stack Star toggle persistence (persisted in DB column `emails.is_starred`)
 - [x] CSV / TXT lead upload with email regex extraction, deduplication, and chips
 - [x] Start time picker with "Send Later" popover and quick presets
 - [x] Delay between emails (seconds) and hourly limit inputs
+- [x] Filter funnel dropdown (All, Scheduled, Sending)
 - [x] Shared Scheduled and Sent table/list driven by reusable components
 - [x] Real-time 5-second polling via React Query without UI flicker
 - [x] Debounced search querying Elasticsearch with 503 fallback
 - [x] Loading spinners, empty states with illustrations, and error banners
 - [x] Connect Slack integration control and notification handling
-- [x] Strict TypeScript (zero `any`, zero build errors) and all files < 150 lines
+- [x] Strict TypeScript (zero `any`, zero build errors) and clean component architecture
+
+---
+
+## 5-Minute Demo Video Guide
+
+Record a 5-minute Loom or unlisted YouTube video following this structure:
+
+1. **Minute 0:00 – 0:45: Project Overview & Google Login**
+   * Introduce ReachInbox / Outbox Labs Email Scheduler.
+   * Log in with real Google OAuth -> highlight user avatar, email, and "Connect Slack" button.
+2. **Minute 0:45 – 1:30: Slack OAuth & Dashboard Tour**
+   * Click "Connect Slack" -> Authorize in Slack -> verify green connected badge `#alerts`.
+   * Tour Scheduled and Sent tabs, filter funnel, and live Bull Board at `/admin/queues`.
+3. **Minute 1:30 – 2:45: Compose, Real Formatting & Scheduling**
+   * Upload leads file (show count detected).
+   * Type message: demonstrate live WYSIWYG Bold, Underline, Quotes.
+   * Attach files (show real preview).
+   * Click "Send Later" clock popover -> pick future date -> show reset behavior.
+   * Set Hourly Limit = 100, Delay = 2s, click Send.
+4. **Minute 2:45 – 3:30: Live Delivery, Elasticsearch & Detail View**
+   * Watch Scheduled list update in real time.
+   * Click row to open Email Detail View -> verify 100% real body, attachments, and toggle gold star.
+   * Type in Search bar -> show real-time Elasticsearch multi-match results.
+5. **Minute 3:30 – 4:15: Rate Limiting & Slack Alert**
+   * Show 100 emails sent and remaining emails deferred to next hour window.
+   * Open Slack channel: show live incoming webhook alert with pending count and next window start time.
+6. **Minute 4:15 – 5:00: Crash Resilience / Server Restart**
+   * Stop backend/worker process with `Ctrl+C`.
+   * Restart worker (`npm run dev:worker`).
+   * Show log: *"recovery re-enqueued scheduled emails"*.
+   * Verify future emails send at the exact scheduled time without re-sending completed emails or losing state.
+
+---
+
+## Submission Details
+
+* **Private Repository Collaborators:** `Mitrajit`, `Yadav036`
+* **ClickUp Submission Form:** [Fill Form Here](https://forms.clickup.com/9005062261/f/8cbwp3n-8876/6NNNJ92DV93PQTAYST)
 
 ---
 
 ## Assumptions & Deviations
 
-1. **Per-Email Detail View:** The Figma contains a frame showing an opened email view. This was omitted per assignment specifications because the backend does not provide a single email detail endpoint (`GET /api/emails/:id`) and list queries do not return the full body.
-2. **Email / Password Form Fields on Login:** The Figma login frame shows email/password inputs. These are displayed as visual indicators only, as the backend exclusively implements Google OAuth login.
-3. **Sender Picker:** Figma shows a sender selection dropdown in the composer. The backend assigns senders round-robin across the active sender pool to maximize throughput; therefore, the field displays the authenticated user's email.
-4. **Dev Port Fallback on Windows:** On Windows hosts with WSL2/Hyper-V enabled, port `5173` is frequently included in dynamic TCP exclusion ranges (`netsh interface ipv4 show excludedportrange`). `vite.config.ts` detects this and automatically falls back to port `5241`.
+1. **Email / Password Form Fields on Login:** The Figma login frame shows static email/password inputs. These are displayed as visual indicators only, as the backend exclusively implements real Google OAuth login.
+2. **Sender Round-Robin:** The backend assigns senders round-robin across the active Ethereal sender pool to maximize throughput while respecting individual sender delay spacing.
+3. **Dev Port Fallback on Windows:** On Windows hosts with WSL2/Hyper-V enabled, port `5173` is frequently included in dynamic TCP exclusion ranges (`netsh interface ipv4 show excludedportrange`). `vite.config.ts` detects this and automatically falls back to port `5241`.
