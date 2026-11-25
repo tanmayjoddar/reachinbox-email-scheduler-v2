@@ -74,7 +74,7 @@ export interface EmailListQuery {
 
 export async function listEmails(userId: string, { status, page, limit }: EmailListQuery) {
   const statuses = status === 'scheduled' ? ['scheduled', 'processing'] : ['sent', 'failed'];
-  const order = status === 'scheduled' ? 'e.scheduled_at ASC' : 'e.sent_at DESC NULLS LAST';
+  const order = status === 'scheduled' ? 'e.is_starred DESC, e.scheduled_at ASC' : 'e.is_starred DESC, e.sent_at DESC NULLS LAST';
 
   const items = await pool.query(
     `SELECT e.id, e.recipient, b.subject, b.body, COALESCE(b.attachments, '[]'::jsonb) AS "attachments",

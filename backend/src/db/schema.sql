@@ -55,6 +55,7 @@ ALTER TABLE emails ADD COLUMN IF NOT EXISTS is_starred boolean NOT NULL DEFAULT 
 
 CREATE INDEX IF NOT EXISTS emails_user_status_scheduled_idx ON emails (user_id, status, scheduled_at);
 CREATE INDEX IF NOT EXISTS emails_status_scheduled_idx ON emails (status, scheduled_at);
+CREATE INDEX IF NOT EXISTS emails_user_starred_idx ON emails (user_id, is_starred);
 
 CREATE TABLE IF NOT EXISTS slack_connections (
   user_id uuid PRIMARY KEY REFERENCES users(id),

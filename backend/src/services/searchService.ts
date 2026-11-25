@@ -105,16 +105,18 @@ export async function searchEmails({ userId, q, status }: SearchInput) {
   );
   const starMap = new Map<string, boolean>(rows.map((r) => [r.id, r.is_starred]));
 
-  return hits.map((doc) => ({
-    id: doc.id,
-    recipient: doc.recipient,
-    subject: doc.subject,
-    status: doc.status,
-    scheduledAt: doc.scheduledAt,
-    sentAt: doc.sentAt,
-    senderEmail: doc.senderEmail,
-    isStarred: Boolean(starMap.get(doc.id)),
-  }));
+  return hits
+    .map((doc) => ({
+      id: doc.id,
+      recipient: doc.recipient,
+      subject: doc.subject,
+      status: doc.status,
+      scheduledAt: doc.scheduledAt,
+      sentAt: doc.sentAt,
+      senderEmail: doc.senderEmail,
+      isStarred: Boolean(starMap.get(doc.id)),
+    }))
+    .sort((a, b) => (b.isStarred ? 1 : 0) - (a.isStarred ? 1 : 0));
 }
 
 export const closeEs = () => es.close();
