@@ -14,7 +14,25 @@ import { errorHandler } from './middleware/errorHandler';
 import { logger } from './utils/logger';
 
 const app = express();
-app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+const allowedOrigins = [
+  env.FRONTEND_URL,
+  'http://localhost:5241',
+  'http://localhost:5173',
+  'https://outbox-scheduler-frontend.outbox-frontend.workers.dev',
+].filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow requests with no origin (like mobile apps, curl, or server-to-server)
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+  })
+);
 app.use(cookieParser());
 app.use(express.json({ limit: '1mb' }));
 

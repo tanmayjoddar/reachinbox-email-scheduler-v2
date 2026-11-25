@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "outbox-scheduler-frontend",
+  "compatibility_date": "2024-11-01",
+  "main": "worker.js",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    "BACKEND_URL": "https://progeny-diagnosis-compile.ngrok-free.dev"
+  }
+}

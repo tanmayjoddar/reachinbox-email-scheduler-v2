@@ -22,9 +22,21 @@ const cookieBase = {
 
 export const authRoutes = Router();
 
-authRoutes.get('/auth/google', (_req, res) => {
+authRoutes.get('/auth/google', (req, res) => {
   const state = randomUUID();
   res.cookie('oauth_state', state, { ...cookieBase, maxAge: 10 * 60 * 1000 });
+
+  // Remember frontend origin so we redirect back to either Cloudflare Workers or localhost
+  const referer = req.headers.referer;
+  if (referer) {
+    try {
+      const origin = new URL(referer).origin;
+      res.cookie('oauth_origin', origin, { ...cookieBase, maxAge: 10 * 60 * 1000 });
+    } catch {
+      // ignore invalid referer URL
+    }
+  }
+
   const url = google.generateAuthUrl({
     access_type: 'online',
     scope: ['openid', 'email', 'profile'],
@@ -34,10 +46,11 @@ authRoutes.get('/auth/google', (_req, res) => {
 });
 
 authRoutes.get('/auth/google/callback', async (req, res) => {
+  const targetFrontend = req.cookies?.oauth_origin || env.FRONTEND_URL || 'http://localhost:5241';
   try {
     const { code, state } = req.query;
     if (typeof code !== 'string' || typeof state !== 'string' || state !== req.cookies?.oauth_state) {
-      res.redirect(`${env.FRONTEND_URL}/login?error=auth_failed`);
+      res.redirect(`${targetFrontend}/login?error=auth_failed`);
       return;
     }
 
@@ -52,13 +65,14 @@ authRoutes.get('/auth/google/callback', async (req, res) => {
       [profile.sub, profile.email, profile.name, profile.picture],
     );
 
-    // Cookies are not port-scoped, so a frontend on :5173 and this backend on :3000 share this cookie on localhost.
+    // Set auth cookie
     res.cookie('token', signToken(rows[0].id), { ...cookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.clearCookie('oauth_state');
-    res.redirect(`${env.FRONTEND_URL}/dashboard`);
+    res.clearCookie('oauth_origin');
+    res.redirect(`${targetFrontend}/dashboard`);
   } catch (err) {
     logger.warn({ err }, 'google auth failed');
-    res.redirect(`${env.FRONTEND_URL}/login?error=auth_failed`);
+    res.redirect(`${targetFrontend}/login?error=auth_failed`);
   }
 });
 

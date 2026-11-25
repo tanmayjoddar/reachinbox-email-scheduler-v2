@@ -11,13 +11,30 @@ import {
   deleteSlackConnection,
 } from '../services/slackService';
 
+const cookieBase = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: env.NODE_ENV === 'production',
+};
+
 export const slackRoutes = Router();
 
 slackRoutes.get('/api/slack/connect', requireAuth, (req, res) => {
+  const referer = req.headers.referer;
+  if (referer) {
+    try {
+      const origin = new URL(referer).origin;
+      res.cookie('slack_origin', origin, { ...cookieBase, maxAge: 10 * 60 * 1000 });
+    } catch {
+      // ignore invalid referer URL
+    }
+  }
   res.json({ url: slackAuthorizeUrl(signToken(req.userId!, '10m')) });
 });
 
 slackRoutes.get('/slack/callback', async (req, res) => {
+  const targetFrontend = req.cookies?.slack_origin || env.FRONTEND_URL || 'http://localhost:5241';
+  res.clearCookie('slack_origin');
   try {
     const { code, state } = req.query;
     if (typeof code !== 'string' || typeof state !== 'string') throw new Error('missing code or state');
@@ -27,10 +44,10 @@ slackRoutes.get('/slack/callback', async (req, res) => {
     if (!data.ok || !data.team || !data.incoming_webhook) throw new Error(data.error ?? 'slack oauth failed');
 
     await saveSlackConnection(userId, data.team.name, data.incoming_webhook.channel, data.incoming_webhook.url);
-    res.redirect(`${env.FRONTEND_URL}/dashboard?slack=connected`);
+    res.redirect(`${targetFrontend}/dashboard?slack=connected`);
   } catch (err) {
     logger.warn({ err }, 'slack oauth failed');
-    res.redirect(`${env.FRONTEND_URL}/dashboard?slack=error`);
+    res.redirect(`${targetFrontend}/dashboard?slack=error`);
   }
 });
 
