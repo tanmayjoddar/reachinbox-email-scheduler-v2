@@ -112,16 +112,13 @@ export function EmailList({ tab }: EmailListProps) {
       />
 
       {isSearching && (
-        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200/80 rounded-xl px-4 py-2 text-xs text-emerald-900">
+        <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-2 text-xs text-slate-700">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-emerald-600 text-white font-mono text-[10px] font-bold">
-              Elasticsearch
-            </span>
             <span>
-              Found <strong>{items.length}</strong> {items.length === 1 ? 'result' : 'results'} for &ldquo;<span className="font-semibold text-emerald-950">{search}</span>&rdquo;
+              Found <strong>{items.length}</strong> {items.length === 1 ? 'result' : 'results'} for &ldquo;<span className="font-semibold text-slate-900">{search}</span>&rdquo;
             </span>
           </div>
-          {searchQuery.isFetching && <Spinner className="h-3 w-3 text-emerald-600" />}
+          {searchQuery.isFetching && <Spinner className="h-3 w-3 text-slate-500" />}
         </div>
       )}
 
@@ -155,7 +152,7 @@ export function EmailList({ tab }: EmailListProps) {
             ) : (
               <Link
                 to="/compose"
-                className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-primary text-primary-foreground text-xs font-medium rounded-lg hover:opacity-90 transition-opacity shadow-sm"
+                className="inline-flex items-center justify-center gap-2 mt-4 px-4 py-2 bg-slate-900 !text-white hover:bg-slate-800 text-xs font-semibold rounded-lg shadow-sm transition-colors"
               >
                 Compose New Email
               </Link>
