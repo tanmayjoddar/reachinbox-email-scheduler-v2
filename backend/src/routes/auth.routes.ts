@@ -20,41 +20,86 @@ const cookieBase = {
   secure: env.NODE_ENV === 'production',
 };
 
+interface OAuthStatePayload {
+  nonce: string;
+  origin: string;
+  callbackUrl: string;
+}
+
+function parseState(stateParam: unknown): OAuthStatePayload | null {
+  if (typeof stateParam !== 'string') return null;
+  try {
+    const json = Buffer.from(stateParam, 'base64url').toString('utf8');
+    const parsed = JSON.parse(json);
+    if (parsed && typeof parsed.origin === 'string') return parsed;
+  } catch {
+    // not JSON base64url
+  }
+  return null;
+}
+
 export const authRoutes = Router();
 
 authRoutes.get('/auth/google', (req, res) => {
-  const state = randomUUID();
-  res.cookie('oauth_state', state, { ...cookieBase, maxAge: 10 * 60 * 1000 });
+  const forwardedHost = req.headers['x-forwarded-host'] as string | undefined;
+  const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined) || 'https';
 
-  // Remember frontend origin so we redirect back to either Cloudflare Workers or localhost
-  const referer = req.headers.referer;
-  if (referer) {
+  // Determine frontend origin
+  let frontendOrigin = 'https://outbox-scheduler-frontend.outbox-frontend.workers.dev';
+  if (forwardedHost) {
+    frontendOrigin = `${forwardedProto}://${forwardedHost}`;
+  } else if (req.headers.referer) {
     try {
-      const origin = new URL(referer).origin;
-      res.cookie('oauth_origin', origin, { ...cookieBase, maxAge: 10 * 60 * 1000 });
-    } catch {
-      // ignore invalid referer URL
-    }
+      frontendOrigin = new URL(req.headers.referer).origin;
+    } catch {}
+  } else if (env.FRONTEND_URL && !env.FRONTEND_URL.includes('localhost')) {
+    frontendOrigin = env.FRONTEND_URL;
   }
+
+  // Determine redirect URI for Google
+  const callbackUrl = `${env.BASE_URL}/auth/google/callback`;
+
+  const nonce = randomUUID();
+  res.cookie('oauth_state', nonce, { ...cookieBase, maxAge: 10 * 60 * 1000 });
+
+  const statePayload: OAuthStatePayload = {
+    nonce,
+    origin: frontendOrigin,
+    callbackUrl,
+  };
+  const state = Buffer.from(JSON.stringify(statePayload)).toString('base64url');
 
   const url = google.generateAuthUrl({
     access_type: 'online',
     scope: ['openid', 'email', 'profile'],
     state,
+    redirect_uri: callbackUrl,
   });
   res.redirect(url);
 });
 
 authRoutes.get('/auth/google/callback', async (req, res) => {
-  const targetFrontend = req.cookies?.oauth_origin || env.FRONTEND_URL || 'http://localhost:5241';
+  const { code, state } = req.query;
+  const parsedState = parseState(state);
+
+  const targetFrontend =
+    parsedState?.origin ||
+    req.cookies?.oauth_origin ||
+    (env.FRONTEND_URL && !env.FRONTEND_URL.includes('localhost') ? env.FRONTEND_URL : null) ||
+    'https://outbox-scheduler-frontend.outbox-frontend.workers.dev';
+
   try {
-    const { code, state } = req.query;
-    if (typeof code !== 'string' || typeof state !== 'string' || state !== req.cookies?.oauth_state) {
+    if (typeof code !== 'string') {
       res.redirect(`${targetFrontend}/login?error=auth_failed`);
       return;
     }
 
-    const { tokens } = await google.getToken(code);
+    const callbackUrl = parsedState?.callbackUrl || `${env.BASE_URL}/auth/google/callback`;
+
+    const { tokens } = await google.getToken({
+      code,
+      redirect_uri: callbackUrl,
+    });
     const ticket = await google.verifyIdToken({ idToken: tokens.id_token!, audience: env.GOOGLE_CLIENT_ID });
     const profile = ticket.getPayload()!;
 
@@ -65,15 +110,35 @@ authRoutes.get('/auth/google/callback', async (req, res) => {
       [profile.sub, profile.email, profile.name, profile.picture],
     );
 
+    const authToken = signToken(rows[0].id);
+
     // Set auth cookie
-    res.cookie('token', signToken(rows[0].id), { ...cookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 });
+    res.cookie('token', authToken, { ...cookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 });
     res.clearCookie('oauth_state');
     res.clearCookie('oauth_origin');
-    res.redirect(`${targetFrontend}/dashboard`);
+
+    // If user's browser is currently on a different domain than targetFrontend,
+    // bridge the cookie by redirecting to targetFrontend/auth/session?token=...
+    const reqHost = req.headers['x-forwarded-host'] || req.headers.host;
+    const targetHost = new URL(targetFrontend).host;
+
+    if (reqHost && targetHost && reqHost !== targetHost) {
+      res.redirect(`${targetFrontend}/auth/session?token=${encodeURIComponent(authToken)}`);
+    } else {
+      res.redirect(`${targetFrontend}/dashboard`);
+    }
   } catch (err) {
     logger.warn({ err }, 'google auth failed');
     res.redirect(`${targetFrontend}/login?error=auth_failed`);
   }
+});
+
+authRoutes.get('/auth/session', (req, res) => {
+  const token = req.query.token;
+  if (typeof token === 'string' && token) {
+    res.cookie('token', token, { ...cookieBase, maxAge: 7 * 24 * 60 * 60 * 1000 });
+  }
+  res.redirect('/dashboard');
 });
 
 authRoutes.get('/api/me', requireAuth, async (req, res) => {
