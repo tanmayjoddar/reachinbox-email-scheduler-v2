@@ -28,4 +28,14 @@ export default {
     // Serve static SPA assets with index.html fallback
     return env.ASSETS.fetch(request);
   },
+
+  // 24/7 Keep-Alive Cron: Pings Render backend & Neon Postgres every 10 minutes so it never sleeps
+  async scheduled(event, env, ctx) {
+    const backendUrl = env.BACKEND_URL || 'https://reachinbox-email-scheduler-cbg6.onrender.com';
+    ctx.waitUntil(
+      fetch(`${backendUrl}/health`)
+        .then((r) => console.log('Keep-alive ping status:', r.status))
+        .catch((err) => console.error('Keep-alive ping failed:', err))
+    );
+  },
 };

@@ -10,5 +10,8 @@
   },
   "vars": {
     "BACKEND_URL": "https://reachinbox-email-scheduler-cbg6.onrender.com"
+  },
+  "triggers": {
+    "crons": ["*/10 * * * *"]
   }
 }
