@@ -39,8 +39,8 @@ export function DashboardLayout({ user }: { user: User }) {
 
   return (
     <div className="min-h-screen bg-white flex flex-col md:flex-row">
-      {/* Left Sidebar: 236px width */}
-      <aside className="w-full md:w-[236px] md:min-w-[236px] p-4 shrink-0 flex flex-col gap-4 border-b md:border-b-0 md:border-r border-border">
+      {/* Left Sidebar: 236px width, sticky so it stays visible regardless of table height */}
+      <aside className="w-full md:w-[236px] md:min-w-[236px] md:h-screen md:sticky md:top-0 md:overflow-y-auto p-4 shrink-0 flex flex-col gap-3 border-b md:border-b-0 md:border-r border-border bg-white z-20">
         {/* ONB Logo: 236 fill into 39 hug */}
         <div className="w-full h-[39px] flex items-center px-1">
           <OnbLogo className="h-6 w-auto text-primary" />
@@ -49,10 +49,13 @@ export function DashboardLayout({ user }: { user: User }) {
         {/* User Card */}
         <UserMenu user={user} />
 
+        {/* Slack Connection Button/Badge directly beneath user profile */}
+        <SlackConnect />
+
         {/* Compose Button */}
         <NavLink
           to="/compose"
-          className="flex items-center justify-center rounded-full border border-accent text-accent font-medium py-2 px-4 hover:bg-accent-light transition-colors text-xs text-center shadow-sm"
+          className="flex items-center justify-center rounded-full border border-accent text-accent font-medium py-2 px-4 hover:bg-accent-light transition-colors text-xs text-center shadow-xs"
         >
           Compose
         </NavLink>
@@ -72,10 +75,6 @@ export function DashboardLayout({ user }: { user: User }) {
             label="Sent"
             count={sentQuery.data?.total}
           />
-        </div>
-
-        <div className="mt-auto hidden md:block pt-4 border-t border-border/40">
-          <SlackConnect />
         </div>
       </aside>
 
